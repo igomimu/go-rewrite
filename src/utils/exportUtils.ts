@@ -19,9 +19,23 @@ export async function exportToPng(svgElement: SVGSVGElement, scale = 1, backgrou
     // 1. Clone the SVG to manipulate it without affecting the DOM
     const clone = svgElement.cloneNode(true) as SVGSVGElement;
 
-    // 1.5 Remove ignored elements (Selection Rect, etc.)
+    // 3. Remove "data-export-ignore" elements (e.g. selection rect)
     const ignoredElements = clone.querySelectorAll('[data-export-ignore="true"]');
     ignoredElements.forEach(el => el.remove());
+
+    // 4. Uniform Line Thickness for Export (Cut-out look)
+    const gridLines = clone.querySelectorAll('.grid-line');
+    gridLines.forEach(el => {
+        (el as SVGLineElement).style.strokeWidth = '3px';
+    });
+
+    // 4.5 Thicken White Stones in Monochrome Mode
+    if (backgroundColor.toUpperCase() === '#FFFFFF') {
+        const whiteStones = clone.querySelectorAll('.white-stone');
+        whiteStones.forEach(el => {
+            (el as SVGCircleElement).style.strokeWidth = '3px';
+        });
+    }
 
     // 2. Get the crop aspect ratio / dimensions from viewBox
     // App.tsx logic ensures viewBox is set correctly on the element passed here.

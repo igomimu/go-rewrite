@@ -70,8 +70,15 @@ export function generateSGF(board: BoardState, size: number): string {
     return sgf;
 }
 
+export interface SgfMove {
+    x: number;
+    y: number;
+    color: StoneColor;
+}
+
 export interface ParsedSGF {
-    board: BoardState;
+    board: BoardState; // Initial Setup
+    moves: SgfMove[];  // Move Sequence
     size: number;
 }
 
@@ -93,10 +100,10 @@ export function parseSGF(sgfContent: string): ParsedSGF {
         if (isNaN(size) || size < 1) size = 19;
     }
 
-    // Initialize Board
+    // Initialize Board (Setup State)
     const board: BoardState = Array(size).fill(null).map(() => Array(size).fill(null));
 
-    // Helper to place stone
+    // Helper to place stone (for setup)
     const place = (coord: string, color: StoneColor) => {
         if (coord.length < 2) return;
         const x = fromSgfCoord(coord[0]);
@@ -132,34 +139,30 @@ export function parseSGF(sgfContent: string): ParsedSGF {
     parseSetup('AB', 'BLACK');
     parseSetup('AW', 'WHITE');
 
-    // 3. Parse Moves (B[aa], W[bb]) - if mixed with Setup?
-    // If it's a game record, we replay moves.
-    // Just overwriting the board state in order match found.
-    // Note: This is a loose parser. It won't handle detailed trees or variations correctly.
-    // It just flattens everything it finds.
-
+    // 3. Parse Moves (B[aa], W[bb])
+    // If it's a game record, we replay moves to handle captures and numbering.
+    const moves: SgfMove[] = [];
     const moveRegex = /;(B|W)\[([a-zA-Z]{2})\]/g;
     let moveMatch;
-    // We need to loop regex on the string to maintain order, OR just trust AB/AW are first, then B/W?
-    // Usually moves come after setup.
-    // If we just replay B/W moves found in the file on the board, we get final position.
-    // WARNING: Captures?
-    // If we replay moves, we MUST handle captures.
-    // Our simplified logic just places stones. It effectively acts as "Add Stone".
-    // For a proper editor, handling captures on load is tricky without full engine.
-    // "GORewrite" is a diagram editor. 
-    // Let's assume loading SGF is mostly for loading Diagram SGFs (AB/AW) or just placing moves without capture logic
-    // UNLESS user complains.
-    // Implementing capture logic inside parser is complex.
-    // Let's just PLACE stones for B/W too.
+    // let moveNumber = 1; // No longer needed here, moves are just extracted.
 
     while ((moveMatch = moveRegex.exec(sgfContent)) !== null) {
-        const color = moveMatch[1] === 'B' ? 'BLACK' : 'WHITE';
+        const colorChar = moveMatch[1];
+        const color = colorChar === 'B' ? 'BLACK' : 'WHITE';
         const coord = moveMatch[2];
-        place(coord, color);
+
+        if (coord.length >= 2) {
+            const x = fromSgfCoord(coord[0]);
+            const y = fromSgfCoord(coord[1]);
+
+            if (x >= 1 && x <= size && y >= 1 && y <= size) {
+                // Do NOT place stone or check captures here. Just record the move.
+                moves.push({ x, y, color });
+            }
+        }
     }
 
-    // 4. Parse Labels (LB[aa:1][bb:2])
+    // 4. Parse Labels (LB[aa:1][bb:2]) - Apply to Setup Board
     const labelRegex = /LB((?:\[[a-zA-Z0-9:]+\])+)/g;
     let lbMatch;
     while ((lbMatch = labelRegex.exec(sgfContent)) !== null) {
@@ -186,5 +189,5 @@ export function parseSGF(sgfContent: string): ParsedSGF {
         }
     }
 
-    return { board, size };
+    return { board, moves, size };
 }

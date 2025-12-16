@@ -71,7 +71,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
         minX: 1, maxX: boardSize, minY: 1, maxY: boardSize
     };
 
-    // Visual Tuning Constants (Updated v6)
+    // Visual Tuning Constants (Updated v22)
     const LINE_WIDTH = 1;
     const BORDER_WIDTH = 2;
     const STONE_RADIUS = CELL_SIZE * 0.47;
@@ -154,6 +154,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                 strokeWidth={width}
                 vectorEffect="non-scaling-stroke"
                 strokeLinecap="square"
+                className="grid-line"
             />
         );
         lines.push(
@@ -165,6 +166,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                 strokeWidth={width}
                 vectorEffect="non-scaling-stroke"
                 strokeLinecap="square"
+                className="grid-line"
             />
         );
     }
@@ -247,7 +249,8 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                             cx={cx} cy={cy} r={STONE_RADIUS}
                             fill={isBlack ? "black" : "white"}
                             stroke={isBlack ? "none" : "black"}
-                            strokeWidth={isBlack ? 0 : 1}
+                            strokeWidth={isBlack ? 0 : LINE_WIDTH}
+                            className={isBlack ? "black-stone" : "white-stone"}
                         />
                         {stone.number && (
                             <text

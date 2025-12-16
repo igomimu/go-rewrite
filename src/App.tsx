@@ -474,20 +474,56 @@ function App() {
             const text = e.clipboardData?.getData('text');
             if (text && (text.includes('(;') || text.includes('GM['))) {
                 e.preventDefault();
-                // Need to act on *current* history
-                const { board: newBoard, size: newSize } = parseSGF(text);
-                // We can't use `commitState` easily here because it closes over `history`.
-                // But we are in an effect that depends on `history` (added below).
-                // So `history` is fresh.
-                const newHistory = history.slice(0, currentMoveIndex + 1);
-                newHistory.push({
-                    board: newBoard,
-                    nextNumber: nextNumber, // Preserve tools
-                    activeColor: activeColor,
+                // Parse SGF: get Initial Setup + Move Sequence
+                const { board: startBoard, moves, size: newSize } = parseSGF(text);
+
+                // Initialize History with Start Board
+                const newHistory: HistoryState[] = [{
+                    board: JSON.parse(JSON.stringify(startBoard)), // Ensure deep copy of start
+                    nextNumber: 1, // Start moves will be 1
+                    activeColor: 'BLACK', // Default start? SGF usually starts Black.
                     boardSize: newSize
-                });
+                }];
+
+                // Simulate Moves to build History
+                let currentBoard = JSON.parse(JSON.stringify(startBoard));
+                let currentNumber = 1;
+                let currentColor: StoneColor = 'BLACK';
+
+                for (const move of moves) {
+                    // Clone board for next state
+                    const nextBoard = JSON.parse(JSON.stringify(currentBoard));
+
+                    // Place Stone (1-based from parser)
+                    if (move.x >= 1 && move.x <= newSize && move.y >= 1 && move.y <= newSize) {
+                        nextBoard[move.y - 1][move.x - 1] = {
+                            color: move.color,
+                            number: currentNumber
+                        };
+
+                        // Check Captures
+                        const captures = checkCaptures(nextBoard, move.x - 1, move.y - 1, move.color);
+                        captures.forEach(c => {
+                            nextBoard[c.y][c.x] = null;
+                        });
+                    }
+
+                    // Prepare state for history
+                    currentNumber++;
+                    currentColor = move.color === 'BLACK' ? 'WHITE' : 'BLACK'; // Toggle for next
+                    currentBoard = nextBoard;
+
+                    newHistory.push({
+                        board: nextBoard,
+                        nextNumber: currentNumber,
+                        activeColor: currentColor,
+                        boardSize: newSize
+                    });
+                }
+
+                // Update State
                 setHistory(newHistory);
-                setCurrentMoveIndex(newHistory.length - 1);
+                setCurrentMoveIndex(0); // Start at Initial Setup (User Request: "配石だけで表示")
             }
         };
         window.addEventListener('paste', onPaste);
