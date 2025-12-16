@@ -158,7 +158,7 @@ function App() {
         if (mode === 'SIMPLE') {
             // 1. Swap Tool Color
             const newColor = activeColor === 'BLACK' ? 'WHITE' : 'BLACK';
-            
+
             // 2. Check for stone to swap at cursor
             // If user double clicks a stone, they often want THAT stone to change color 
             // AND the tool to switch.
@@ -174,15 +174,15 @@ function App() {
                     boardChanged = true;
                 }
             }
-            
+
             if (boardChanged) {
-                 // Determine next number logic? In simple mode, number isn't important, but we pass it.
-                 commitState(newBoard, nextNumber, newColor, boardSize);
+                // Determine next number logic? In simple mode, number isn't important, but we pass it.
+                commitState(newBoard, nextNumber, newColor, boardSize);
             } else {
-                 // Just tool swap
-                 const newHistory = [...history];
-                 newHistory[currentMoveIndex] = { ...newHistory[currentMoveIndex], activeColor: newColor };
-                 setHistory(newHistory);
+                // Just tool swap
+                const newHistory = [...history];
+                newHistory[currentMoveIndex] = { ...newHistory[currentMoveIndex], activeColor: newColor };
+                setHistory(newHistory);
             }
             return;
         }
@@ -485,7 +485,7 @@ function App() {
 
     return (
         <div className="p-4 bg-gray-100 min-h-screen flex flex-col items-center font-sans text-sm pb-20 select-none">
-            <div className="flex justify-between w-full max-w-[450px] items-center mb-2">
+            <div className="flex justify-between w-full items-center mb-2">
                 <h1 className="text-xl font-bold text-gray-800">GORewrite</h1>
                 <div className="flex gap-2 items-center">
                     <button onClick={handleUndo} disabled={currentMoveIndex === 0}
@@ -561,7 +561,7 @@ function App() {
                             </div>
                         </div>
                         <div className="mt-6 text-center text-xs text-gray-400">
-                             GORewrite v21
+                            GORewrite v21
                         </div>
                     </div>
                 </div>
@@ -569,7 +569,7 @@ function App() {
 
             {/* Board Container */}
             <div
-                className="bg-white shadow-lg p-2 rounded mb-4 w-full max-w-[450px]"
+                className="bg-white shadow-lg p-2 rounded mb-4 w-full"
                 onDoubleClick={handleDoubleClick}
             >
                 <GoBoard
@@ -626,7 +626,7 @@ function App() {
             </div>
 
             {/* Controls */}
-            <div className="bg-white p-4 rounded shadow w-full max-w-[450px] space-y-4">
+            <div className="bg-white p-4 rounded shadow w-full space-y-4">
 
                 {/* Mode Switch (Compact Icons) */}
                 <div className="flex justify-center space-x-4 border-b pb-2">

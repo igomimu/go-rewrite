@@ -5,8 +5,8 @@
 /* Optional: Custom scrollbar or body styles if needed */
 body {
     @apply bg-gray-50 text-gray-900;
-    width: 500px;
-    /* Force popup width */
+    width: 100%;
+    min-width: 300px;
     margin: 0;
     padding: 0;
     overflow-x: hidden;
