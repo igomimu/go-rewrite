@@ -23,11 +23,7 @@ export async function exportToPng(svgElement: SVGSVGElement, scale = 1, backgrou
     const ignoredElements = clone.querySelectorAll('[data-export-ignore="true"]');
     ignoredElements.forEach(el => el.remove());
 
-    // 4. Uniform Line Thickness for Export (Cut-out look)
-    const gridLines = clone.querySelectorAll('.grid-line');
-    gridLines.forEach(el => {
-        (el as SVGLineElement).style.strokeWidth = '3px';
-    });
+
 
     // 4.5 Thicken White Stones in Monochrome Mode
     if (backgroundColor.toUpperCase() === '#FFFFFF') {

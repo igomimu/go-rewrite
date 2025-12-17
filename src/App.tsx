@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import GoBoard, { ViewRange, BoardState, StoneColor } from './components/GoBoard'
 import { exportToPng } from './utils/exportUtils'
 import { checkCaptures } from './utils/gameLogic'
@@ -270,7 +270,7 @@ function App() {
                 const newBoard = board.map(row => [...row]);
                 newBoard[y - 1][x - 1] = null;
                 commitState(newBoard, nextNumber, activeColor, boardSize);
-                return;
+                return true;
             }
         }
         if (selectionStart && selectionEnd) {
@@ -288,44 +288,81 @@ function App() {
                     }
                 }
             }
-            if (changed) commitState(newBoard, nextNumber, activeColor, boardSize);
+            if (changed) {
+                commitState(newBoard, nextNumber, activeColor, boardSize);
+                return true;
+            }
         }
+        return false;
     };
 
-    const handleExport = useCallback(async () => {
-        // Scale 3 for Print Quality (approx 300dpi if original is 96dpi, but screens are varied. 3x is safe for print).
-        if (svgRef.current) await exportToPng(svgRef.current, 3, isMonochrome ? '#FFFFFF' : '#DCB35C');
-    }, [isMonochrome]);
+    const getBounds = useCallback((searchArea?: { x1: number, y1: number, x2: number, y2: number }) => {
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        let hasStones = false;
 
-    const handleExportSelection = useCallback(async () => {
-        if (!svgRef.current || !selectionStart || !selectionEnd) return;
+        const startX = searchArea ? Math.max(1, searchArea.x1) : 1;
+        const endX = searchArea ? Math.min(boardSize, searchArea.x2) : boardSize;
+        const startY = searchArea ? Math.max(1, searchArea.y1) : 1;
+        const endY = searchArea ? Math.min(boardSize, searchArea.y2) : boardSize;
 
-        // Calculate crop bounds based on GoBoard constants
+        for (let y = startY; y <= endY; y++) {
+            for (let x = startX; x <= endX; x++) {
+                if (board[y - 1][x - 1]) {
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                    hasStones = true;
+                }
+            }
+        }
+        return { hasStones, minX, maxX, minY, maxY };
+    }, [board, boardSize]);
+
+    const performExport = async (bounds: { minX: number, maxX: number, minY: number, maxY: number }) => {
+        if (!svgRef.current) return;
+
         const CELL_SIZE = 40;
         const MARGIN = 40;
+        const PADDING = 20; // 20px is exact half cell (tight crop for 19px radius stones)
 
-        const minX = Math.min(selectionStart.x, selectionEnd.x);
-        const maxX = Math.max(selectionStart.x, selectionEnd.x);
-        const minY = Math.min(selectionStart.y, selectionEnd.y);
-        const maxY = Math.max(selectionStart.y, selectionEnd.y);
+        const { minX, maxX, minY, maxY } = bounds;
 
-        // Calculate viewBox for the crop
-        // Logic matches GoBoard.tsx internal calculation
-        const x = (minX - 1) * CELL_SIZE;
-        const y = (minY - 1) * CELL_SIZE;
-        const width = (maxX - minX) * CELL_SIZE + MARGIN * 2;
-        const height = (maxY - minY) * CELL_SIZE + MARGIN * 2;
+        const x = (minX - 1) * CELL_SIZE + (MARGIN - PADDING);
+        const y = (minY - 1) * CELL_SIZE + (MARGIN - PADDING);
+        const width = (maxX - minX) * CELL_SIZE + PADDING * 2;
+        const height = (maxY - minY) * CELL_SIZE + PADDING * 2;
 
-        // Clone the SVG to not affect display
         const clone = svgRef.current.cloneNode(true) as SVGSVGElement;
         clone.setAttribute('viewBox', `${x} ${y} ${width} ${height}`);
-
-        // Ensure clone has explicit width/height matching the aspect ratio for the export canvas
-        // (Though exportUtils uses viewBox baseVals, explicitly setting standard attributes helps some environments)
         clone.setAttribute('width', `${width}`);
         clone.setAttribute('height', `${height}`);
 
         await exportToPng(clone, 3, isMonochrome ? '#FFFFFF' : '#DCB35C');
+    };
+
+    const handleExport = useCallback(async () => {
+        // Auto-crop to all stones
+        const { hasStones, minX, maxX, minY, maxY } = getBounds();
+
+        if (hasStones) {
+            await performExport({ minX, maxX, minY, maxY });
+        } else {
+            // Empty board? Full export
+            if (svgRef.current) await exportToPng(svgRef.current, 3, isMonochrome ? '#FFFFFF' : '#DCB35C');
+        }
+    }, [getBounds, isMonochrome]);
+
+    const handleExportSelection = useCallback(async () => {
+        if (!selectionStart || !selectionEnd) return;
+
+        const x1 = Math.min(selectionStart.x, selectionEnd.x);
+        const x2 = Math.max(selectionStart.x, selectionEnd.x);
+        const y1 = Math.min(selectionStart.y, selectionEnd.y);
+        const y2 = Math.max(selectionStart.y, selectionEnd.y);
+
+        // Manual Selection: Use exact bounds (Revert v25 behavior)
+        await performExport({ minX: x1, maxX: x2, minY: y1, maxY: y2 });
 
         // Reset Selection
         setIsSelecting(false);
@@ -333,7 +370,7 @@ function App() {
         setSelectionEnd(null);
         setDragMode('SELECTING');
         setMoveSource(null);
-    }, [selectionStart, selectionEnd, isMonochrome]);
+    }, [selectionStart, selectionEnd, getBounds]);
 
     // SGF Logic
     const handleSaveSGF = async () => {
@@ -374,8 +411,55 @@ function App() {
     };
 
     const loadSGF = (content: string) => {
-        const { board: newBoard, size: newSize } = parseSGF(content);
-        commitState(newBoard, nextNumber, activeColor, newSize);
+        const { board: startBoard, moves, size: newSize } = parseSGF(content);
+
+        // Initialize History with Start Board
+        const newHistory: HistoryState[] = [{
+            board: JSON.parse(JSON.stringify(startBoard)),
+            nextNumber: 1,
+            activeColor: 'BLACK',
+            boardSize: newSize
+        }];
+
+        // Simulate Moves to build History
+        let currentBoard = JSON.parse(JSON.stringify(startBoard));
+        let currentNumber = 1;
+        let currentColor: StoneColor = 'BLACK';
+
+        for (const move of moves) {
+            // Clone board for next state
+            const nextBoard = JSON.parse(JSON.stringify(currentBoard));
+
+            // Place Stone (1-based from parser)
+            if (move.x >= 1 && move.x <= newSize && move.y >= 1 && move.y <= newSize) {
+                nextBoard[move.y - 1][move.x - 1] = {
+                    color: move.color,
+                    number: currentNumber
+                };
+
+                // Check Captures
+                const captures = checkCaptures(nextBoard, move.x - 1, move.y - 1, move.color);
+                captures.forEach(c => {
+                    nextBoard[c.y][c.x] = null;
+                });
+            }
+
+            // Prepare state for history
+            currentNumber++;
+            currentColor = move.color === 'BLACK' ? 'WHITE' : 'BLACK'; // Toggle for next
+            currentBoard = nextBoard;
+
+            newHistory.push({
+                board: nextBoard,
+                nextNumber: currentNumber,
+                activeColor: currentColor,
+                boardSize: newSize
+            });
+        }
+
+        // Update State
+        setHistory(newHistory);
+        setCurrentMoveIndex(0); // Start at Initial Setup
     };
 
     const handleOpenSGF = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -416,45 +500,7 @@ function App() {
     // Fix: use a Ref for history access or depend on history.
     // If we depend on history, we rebind paste listener every move. That's fine.
 
-    useEffect(() => {
-        const onKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                // Priority: Close Help -> Cancel Selection -> Reset View
-                if (showHelp) {
-                    setShowHelp(false);
-                    return;
-                }
-                if (isSelecting || (selectionStart && selectionEnd)) {
-                    setIsSelecting(false);
-                    setSelectionStart(null);
-                    setSelectionEnd(null);
-                    setDragMode('SELECTING');
-                    setMoveSource(null);
-                    return;
-                }
-                if (isCropped) {
-                    setViewRange(null);
-                    return;
-                }
-            }
-            if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
-                e.preventDefault();
-                // Smart Copy: If selection exists, copy selection. Else full board.
-                // We need to check state here.
-                // Refs are cleaner for event listeners but we have dependencies in useEffect.
-                if (selectionStart && selectionEnd) {
-                    handleExportSelection();
-                } else {
-                    handleExport();
-                }
-            }
-            if (e.key === 'Delete' || e.key === 'Backspace') {
-                handleDeleteParams();
-            }
-        };
-        window.addEventListener('keydown', onKeyDown);
-        return () => window.removeEventListener('keydown', onKeyDown);
-    }, [board, history, currentMoveIndex, showHelp, isSelecting, selectionStart, selectionEnd, isCropped, handleExportSelection, handleExport]); // Added deps
+
 
     const handleZoomToSelection = () => {
         if (selectionStart && selectionEnd) {
@@ -469,61 +515,23 @@ function App() {
         }
     };
 
+    // Prevent default scroll on board
+    useEffect(() => {
+        const el = svgRef.current;
+        if (!el) return;
+        const preventScroll = (e: WheelEvent) => {
+            e.preventDefault();
+        };
+        el.addEventListener('wheel', preventScroll, { passive: false });
+        return () => el.removeEventListener('wheel', preventScroll);
+    }, []);
+
     useEffect(() => {
         const onPaste = (e: ClipboardEvent) => {
             const text = e.clipboardData?.getData('text');
             if (text && (text.includes('(;') || text.includes('GM['))) {
                 e.preventDefault();
-                // Parse SGF: get Initial Setup + Move Sequence
-                const { board: startBoard, moves, size: newSize } = parseSGF(text);
-
-                // Initialize History with Start Board
-                const newHistory: HistoryState[] = [{
-                    board: JSON.parse(JSON.stringify(startBoard)), // Ensure deep copy of start
-                    nextNumber: 1, // Start moves will be 1
-                    activeColor: 'BLACK', // Default start? SGF usually starts Black.
-                    boardSize: newSize
-                }];
-
-                // Simulate Moves to build History
-                let currentBoard = JSON.parse(JSON.stringify(startBoard));
-                let currentNumber = 1;
-                let currentColor: StoneColor = 'BLACK';
-
-                for (const move of moves) {
-                    // Clone board for next state
-                    const nextBoard = JSON.parse(JSON.stringify(currentBoard));
-
-                    // Place Stone (1-based from parser)
-                    if (move.x >= 1 && move.x <= newSize && move.y >= 1 && move.y <= newSize) {
-                        nextBoard[move.y - 1][move.x - 1] = {
-                            color: move.color,
-                            number: currentNumber
-                        };
-
-                        // Check Captures
-                        const captures = checkCaptures(nextBoard, move.x - 1, move.y - 1, move.color);
-                        captures.forEach(c => {
-                            nextBoard[c.y][c.x] = null;
-                        });
-                    }
-
-                    // Prepare state for history
-                    currentNumber++;
-                    currentColor = move.color === 'BLACK' ? 'WHITE' : 'BLACK'; // Toggle for next
-                    currentBoard = nextBoard;
-
-                    newHistory.push({
-                        board: nextBoard,
-                        nextNumber: currentNumber,
-                        activeColor: currentColor,
-                        boardSize: newSize
-                    });
-                }
-
-                // Update State
-                setHistory(newHistory);
-                setCurrentMoveIndex(0); // Start at Initial Setup (User Request: "配石だけで表示")
+                loadSGF(text);
             }
         };
         window.addEventListener('paste', onPaste);
@@ -546,24 +554,236 @@ function App() {
         setCurrentMoveIndex(0);
     };
 
+    // Keyboard Shortcuts
+    useEffect(() => {
+        const onKeyDown = async (e: KeyboardEvent) => {
+            // Common Modifiers
+            const isCtrl = e.ctrlKey || e.metaKey;
+
+            if (e.key === 'Escape') {
+                if (showHelp) { setShowHelp(false); return; }
+                if (isSelecting || selectionStart) {
+                    setIsSelecting(false);
+                    setSelectionStart(null);
+                    setSelectionEnd(null);
+                    setDragMode('SELECTING');
+                    setMoveSource(null);
+                    return;
+                }
+                if (isCropped) { setViewRange(null); return; }
+            }
+
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                const deleted = handleDeleteParams();
+                if (!deleted) {
+                    handleUndo();
+                }
+                return;
+            }
+
+            // Shortcuts
+            if (isCtrl) {
+                switch (e.key.toLowerCase()) {
+                    case 'n': // New Diagram
+                        e.preventDefault();
+                        e.stopPropagation();
+                        // @ts-ignore
+                        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+                        clearBoard();
+                        break;
+                    case 'o': // Open SGF
+                        e.preventDefault();
+                        fileInputRef.current?.click();
+                        break;
+                    case 's': // Save SGF
+                        e.preventDefault();
+                        handleSaveSGF();
+                        break;
+                    case 'f': // Copy Image
+                        e.preventDefault();
+                        if (selectionStart && selectionEnd) {
+                            handleExportSelection();
+                        } else {
+                            handleExport();
+                        }
+                        break;
+                    case 'b': // Copy SGF
+                        e.preventDefault();
+                        const sgf = generateSGF(board, boardSize);
+                        try {
+                            await navigator.clipboard.writeText(sgf);
+                            // Optional: Toast notification could be nice here
+                            console.log('SGF Copied to clipboard');
+                        } catch (err) {
+                            console.error('Failed to copy SGF', err);
+                        }
+                        break;
+                    // Ctrl+V is handled by 'paste' event listener
+                }
+            }
+        };
+        // Use capture phase for better override chance
+        window.addEventListener('keydown', onKeyDown, true);
+        return () => window.removeEventListener('keydown', onKeyDown, true);
+    }, [
+        board, boardSize, history, currentMoveIndex,
+        showHelp, isSelecting, selectionStart, selectionEnd, isCropped,
+        handleExportSelection, handleExport, handleSaveSGF, clearBoard, handleDeleteParams
+    ]);
+
+    // Generate hidden move references and special labels
+    // Logic: Identify board locations with multiple moves (collisions).
+    // Assign letters A, B, C... to those locations.
+    // Footer lists all moves at those locations as "MoveNum [ Label ]".
+    const { hiddenMoves, specialLabels } = useMemo(() => {
+        if (currentMoveIndex === 0) return { hiddenMoves: [], specialLabels: [] };
+
+        const moveHistory = new Map<string, { number: number, color: StoneColor }[]>(); // "x,y" -> list of moves
+
+        // 1. Scan History to populate moveHistory
+        for (let i = 1; i <= currentMoveIndex; i++) {
+            const currBoard = history[i].board;
+            const size = history[i].boardSize;
+            const moveNum = history[i - 1].nextNumber; // The number of the stone just placed
+
+            // Find where this move was placed
+            // Optimization: We could store move coords in history, but we don't.
+            // Brute force scan is O(N * BoardSize^2). N ~ 200, BS=361. 72000 ops. Fast enough.
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    const stone = currBoard[y][x];
+                    if (stone && stone.number === moveNum) {
+                        const key = `${x},${y}`;
+                        if (!moveHistory.has(key)) moveHistory.set(key, []);
+                        moveHistory.get(key)?.push({ number: moveNum, color: stone.color });
+                        // Found it, but strictly we should break? 
+                        // Yes, a move only places one stone.
+                        // Wait, what if it was capture? The loop is detecting presence of stone #i.
+                        // Correct.
+                        // We assumed moves are unique #.
+                    }
+                }
+            }
+        }
+
+        // 2. Identify Collisions and Assign Labels
+        const labels: { x: number, y: number, label: string }[] = [];
+        const footer: { left: { text: string, color: StoneColor }, right: { text: string, color: StoneColor } }[] = [];
+
+        let labelIndex = 0;
+        const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+        // Detect "Hidden" moves (not on current board) AND Collisions
+        // User request: "If placing on same point after clearing... assign alphabet".
+        // This implies any point with >1 move in history is a candidate.
+        // OR any point where a move is currently present BUT overwrite happened?
+
+        // Let's look for points with > 1 entry in moveHistory.
+        // AND points where the 'current' stone is not the ONLY stone ever played there.
+
+        // Also check if moves are missing from current board (standard hidden moves).
+        const currentBoard = history[currentMoveIndex].board;
+
+        // We iterate all locations that had stones
+        moveHistory.forEach((moves, key) => {
+            const [x, y] = key.split(',').map(Number);
+            const currentStone = currentBoard[y][x];
+
+            // Condition for Special Labeling:
+            // 1. More than 1 move played here (Collision)
+            // 2. OR Current stone is NOT the one corresponding to the latest move? (Unlikely)
+            // 3. User specifically mentioned "after clearing". collision implies clearing.
+
+            if (moves.length > 1) {
+                // Collision! Assign Label.
+                // If we run out of letters, maybe change logic? (AA..?)
+                // For now single letter.
+                const label = alphabet[labelIndex % alphabet.length];
+                labelIndex++;
+
+                labels.push({ x: x + 1, y: y + 1, label }); // 1-based for props
+
+                // Add all moves at this spot to footer
+                moves.forEach(m => {
+                    footer.push({
+                        left: { text: m.number.toString(), color: m.color },
+                        right: { text: label, color: m.color } // Use same color for label stone? User image has specific styles. 
+                        // Image '7 [ A ]': 7 (Black) [ A (Black) ].
+                        // Usually the label stone takes the color of the move it represents?
+                        // YES.
+                    });
+                });
+            } else {
+                // Single move case.
+                // Check if it's hidden (captured).
+                const m = moves[0];
+                const isVisible = currentStone && currentStone.number === m.number;
+
+                if (!isVisible) {
+                    // It's hidden but NOT a collision (just captured and empty now).
+                    // Standard notation: "15 takes". Or ignore?
+                    // Previous logic: "1 at 9" (if 9 is there).
+                    // If empty, we can't say "at ...".
+                    // If another stone is there (but that would be collision, covered above).
+                    // So here, stone is gone and spot is empty.
+                    // We don't list regular captures in footer usually unless requested.
+                    // User focus is on overwrites.
+                }
+            }
+        });
+
+        // Sort footer by move number
+        footer.sort((a, b) => parseInt(a.left.text) - parseInt(b.left.text));
+
+        return { hiddenMoves: footer, specialLabels: labels };
+    }, [history, currentMoveIndex]);
+
     return (
         <div className="p-4 bg-gray-100 min-h-screen flex flex-col items-center font-sans text-sm pb-20 select-none">
             <div className="flex justify-between w-full items-center mb-2">
                 <div className="flex items-baseline gap-2">
                     <h1 className="text-xl font-bold text-gray-800">GORewrite</h1>
-                    <span className="text-xs text-gray-400 font-normal">v22</span>
+                    <span className="text-xs text-gray-400 font-normal">v31</span>
                 </div>
                 <div className="flex gap-2 items-center">
+                    {/* Hidden Input for Open SGF */}
+                    <input
+                        type="file"
+                        accept=".sgf"
+                        className="hidden"
+                        ref={fileInputRef}
+                        onChange={handleOpenSGF}
+                        style={{ display: 'none' }}
+                    />
+                    {/* Compact Action Buttons */}
+                    <button onClick={clearBoard} title="New / Clear (Ctrl+N)" className="w-8 h-8 rounded-full bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center font-bold transition-colors">
+                        🗑️
+                    </button>
+                    <button onClick={handleSaveSGF} title="Save SGF (Ctrl+S)" className="w-8 h-8 rounded-full bg-green-50 text-green-600 hover:bg-green-100 flex items-center justify-center font-bold transition-colors">
+                        💾
+                    </button>
+                    <button onClick={() => fileInputRef.current?.click()} title="Open SGF (Ctrl+O)" className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center justify-center font-bold transition-colors">
+                        📂
+                    </button>
+                    <button onClick={() => { if (selectionStart && selectionEnd) handleExportSelection(); else handleExport(); }}
+                        title="Copy Image (Ctrl+F)" className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center font-bold transition-colors">
+                        📷
+                    </button>
+
+                    <div className="w-px h-6 bg-gray-300 mx-1"></div>
+
                     <button onClick={handleUndo} disabled={currentMoveIndex === 0}
                         className="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 font-bold">&lt;</button>
                     <div className="text-xs text-gray-500 flex items-center min-w-[20px] justify-center">{mode === 'NUMBERED' ? `${currentMoveIndex}` : ''}</div>
                     <button onClick={handleRedo} disabled={currentMoveIndex === history.length - 1}
                         className="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 font-bold">&gt;</button>
 
+                    <div className="w-px h-6 bg-gray-300 mx-1"></div>
+
                     {/* Open in New Tab */}
                     <button
                         onClick={() => window.open('index.html', '_blank')}
-                        className="ml-2 w-6 h-6 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center font-bold text-xs"
+                        className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center font-bold text-xs"
                         title="Open in New Tab (Maximize)"
                     >
                         ↗
@@ -572,7 +792,7 @@ function App() {
                     {/* Help Button */}
                     <button
                         onClick={() => setShowHelp(true)}
-                        className="ml-1 w-6 h-6 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center font-bold text-xs"
+                        className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center font-bold text-xs"
                         title="Help"
                     >
                         ?
@@ -646,7 +866,7 @@ function App() {
             <div className="w-full flex justify-end mb-2 gap-2">
                 <button
                     onClick={() => setIsMonochrome(!isMonochrome)}
-                    className={`text-xs px-2 py-1 rounded border shadow-sm transition-colors ${isMonochrome
+                    className={`text - xs px - 2 py - 1 rounded border shadow - sm transition - colors ${isMonochrome
                         ? 'bg-gray-800 text-white border-gray-800'
                         : 'bg-yellow-100 text-yellow-800 border-yellow-300 hover:bg-yellow-200'
                         }`}
@@ -678,6 +898,8 @@ function App() {
                     onDragStart={handleDragStart}
                     onDragMove={handleDragMove}
                     onDragEnd={handleDragEnd}
+                    hiddenMoves={hiddenMoves}
+                    specialLabels={specialLabels}
                 />
 
                 {/* Float Controls: Zoom / Reset */}
@@ -722,7 +944,7 @@ function App() {
                 <div className="flex justify-center space-x-4 border-b pb-2">
                     <button
                         title="Simple Mode (No Numbers)"
-                        className={`p-2 rounded-full transition-all ${mode === 'SIMPLE' ? 'bg-blue-100 ring-2 ring-blue-500 scale-110' : 'hover:bg-gray-100 opacity-60 hover:opacity-100'}`}
+                        className={`p - 2 rounded - full transition - all ${mode === 'SIMPLE' ? 'bg-blue-100 ring-2 ring-blue-500 scale-110' : 'hover:bg-gray-100 opacity-60 hover:opacity-100'} `}
                         onClick={() => setMode('SIMPLE')}
                     >
                         <svg width="24" height="24" viewBox="0 0 24 24" className={mode === 'SIMPLE' ? 'text-blue-700' : 'text-gray-600'}>
@@ -731,7 +953,7 @@ function App() {
                     </button>
                     <button
                         title="Numbered Mode"
-                        className={`p-2 rounded-full transition-all ${mode === 'NUMBERED' ? 'bg-blue-100 ring-2 ring-blue-500 scale-110' : 'hover:bg-gray-100 opacity-60 hover:opacity-100'}`}
+                        className={`p - 2 rounded - full transition - all ${mode === 'NUMBERED' ? 'bg-blue-100 ring-2 ring-blue-500 scale-110' : 'hover:bg-gray-100 opacity-60 hover:opacity-100'} `}
                         onClick={() => setMode('NUMBERED')}
                     >
                         <svg width="24" height="24" viewBox="0 0 24 24" className={mode === 'NUMBERED' ? 'text-blue-700' : 'text-gray-600'}>
@@ -748,15 +970,15 @@ function App() {
                             <span className="text-gray-600">Next:</span>
                             <div
                                 onClick={handleIndicatorDoubleClick}
-                                className={`w-6 h-6 rounded-full border border-gray-300 flex items-center justify-center text-xs font-bold cursor-pointer hover:ring-2 hover:ring-blue-300 select-none
-                    ${activeColor === 'BLACK' ? 'bg-black text-white' : 'bg-white text-black'}`}>
+                                className={`w - 6 h - 6 rounded - full border border - gray - 300 flex items - center justify - center text - xs font - bold cursor - pointer hover: ring - 2 hover: ring - blue - 300 select - none
+                    ${activeColor === 'BLACK' ? 'bg-black text-white' : 'bg-white text-black'} `}>
                                 {mode === 'NUMBERED' ? nextNumber : ''}
                             </div>
                         </div>
 
                         <button
                             onClick={() => setShowCoordinates(!showCoordinates)}
-                            className={`text-xs px-2 py-1 rounded border ${showCoordinates ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300'}`}
+                            className={`text - xs px - 2 py - 1 rounded border ${showCoordinates ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300'} `}
                         >
                             Coords: {showCoordinates ? 'ON' : 'OFF'}
                         </button>
@@ -769,7 +991,7 @@ function App() {
                             <button
                                 key={s}
                                 onClick={() => setBoardSize(s)}
-                                className={`text-xs px-2 py-0.5 rounded border ${boardSize === s ? 'bg-gray-700 text-white' : 'text-gray-600 border-gray-300 hover:bg-gray-200'}`}
+                                className={`text - xs px - 2 py - 0.5 rounded border ${boardSize === s ? 'bg-gray-700 text-white' : 'text-gray-600 border-gray-300 hover:bg-gray-200'} `}
                             >
                                 {s}路
                             </button>
@@ -790,40 +1012,11 @@ function App() {
                 </div>
 
                 {/* SGF & Export */}
-                <div className="grid grid-cols-2 gap-2">
-                    <button
-                        onClick={handleSaveSGF}
-                        className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 rounded transition-colors"
-                    >
-                        Save SGF
-                    </button>
-                    <label className="bg-gray-600 hover:bg-gray-700 text-white text-xs font-bold py-2 rounded transition-colors text-center cursor-pointer">
-                        Open SGF
-                        <input
-                            type="file"
-                            accept=".sgf"
-                            className="hidden"
-                            ref={fileInputRef}
-                            onChange={handleOpenSGF}
-                        />
-                    </label>
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-2 pt-2 border-t">
-                    <button
-                        onClick={clearBoard}
-                        className="flex-1 bg-red-50 hover:bg-red-100 text-red-600 py-2 rounded transition-colors border border-red-200"
-                    >
-                        Clear
-                    </button>
-                    <button
-                        onClick={handleExport}
-                        title="Ctrl+F to copy"
-                        className="flex-[2] bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors flex items-center justify-center gap-2"
-                    >
-                        Copy Image
-                    </button>
+                {/* Actions (Moved to Header) */}
+                <div className="text-xs text-center text-gray-400 mt-2 space-y-1 pt-4 border-t border-gray-100">
+                    <div>L: Place / R: Delete / Wheel: Nav</div>
+                    <div>DblClick: Swap Color / Switch Tool</div>
+                    <div>**Ctrl+V: Paste SGF**</div>
                 </div>
 
                 <div className="text-xs text-center text-gray-400 mt-2 space-y-1">

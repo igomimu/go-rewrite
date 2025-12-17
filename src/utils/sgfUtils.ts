@@ -27,33 +27,42 @@ function fromSgfCoord(c: string): number {
 export function generateSGF(board: BoardState, size: number): string {
     const ab: string[] = [];
     const aw: string[] = [];
-    const lb: string[] = [];
+    const moves: { number: number, color: StoneColor, coord: string }[] = [];
 
-    // board is row-major: board[y][x]
-    // SGF is usually [x][y] but let's confirm.
-    // SGF 'aa' is top-left (1,1). 'ss' is bottom-right (19,19).
-    // so x=1->a, y=1->a.
+
+    // 1. Scan Board
     for (let y = 1; y <= size; y++) {
         for (let x = 1; x <= size; x++) {
             const stone = board[y - 1][x - 1];
             if (stone) {
                 const coord = `${toSgfCoord(x)}${toSgfCoord(y)}`;
-                if (stone.color === 'BLACK') {
-                    ab.push(coord);
-                } else {
-                    aw.push(coord);
-                }
 
                 if (stone.number) {
-                    lb.push(`${coord}:${stone.number}`);
+                    // It's a Move (Numbered)
+                    moves.push({
+                        number: stone.number,
+                        color: stone.color,
+                        coord: coord
+                    });
+                } else {
+                    // It's Setup (Simple / Unnumbered)
+                    if (stone.color === 'BLACK') {
+                        ab.push(coord);
+                    } else {
+                        aw.push(coord);
+                    }
                 }
             }
         }
     }
 
+    // 2. Sort Moves by Number
+    moves.sort((a, b) => a.number - b.number);
+
+    // 3. Construct SGF
     let sgf = `(;GM[1]FF[4]SZ[${size}]`;
 
-    // Add stones
+    // Add Setup Stones
     if (ab.length > 0) {
         sgf += `AB` + ab.map(c => `[${c}]`).join('');
     }
@@ -61,9 +70,15 @@ export function generateSGF(board: BoardState, size: number): string {
         sgf += `AW` + aw.map(c => `[${c}]`).join('');
     }
 
-    // Add labels (numbers)
-    if (lb.length > 0) {
-        sgf += `LB` + lb.map(l => `[${l}]`).join('');
+    // Add Moves
+    // Note: SGF moves are nodes ";B[xx]" or ";W[xx]".
+    // We append them sequentially.
+    for (const move of moves) {
+        const c = move.color === 'BLACK' ? 'B' : 'W';
+        sgf += `;${c}[${move.coord}]`;
+        // Optional: Add Label property to the move node if we want to force the number to appear in viewers that support it?
+        // But GORewrite uses the move number naturally.
+        // Standard viewers display move numbers.
     }
 
     sgf += `)`;
