@@ -352,7 +352,6 @@ function App() {
                 r.remove();
             }
         });
-
         clone.setAttribute('viewBox', `${x} ${y} ${width} ${height}`);
         clone.setAttribute('width', `${width}`);
         clone.setAttribute('height', `${height}`);
