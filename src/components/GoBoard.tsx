@@ -39,11 +39,16 @@ export interface GoBoardProps {
 
     // Drag Selection / Move
     selectionStart: { x: number, y: number } | null;
-    selectionEnd: { x: number, y: number } | null;
+    selectionEnd?: { x: number, y: number } | null;
 
     onDragStart: (x: number, y: number) => void;
     onDragMove: (x: number, y: number) => void;
-    onDragEnd: () => void;
+    onDragEnd?: () => void;
+    hiddenMoves?: {
+        left: { text: string, color: StoneColor };
+        right: { text: string, color?: StoneColor, isLabel?: boolean };
+    }[];
+    specialLabels?: { x: number, y: number, label: string }[];
 }
 
 const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
@@ -61,7 +66,9 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
     selectionEnd,
     onDragStart,
     onDragMove,
-    onDragEnd
+    onDragEnd,
+    hiddenMoves = [],
+    specialLabels = []
 }, ref) => {
     const CELL_SIZE = 40;
     const MARGIN = 40;
@@ -71,36 +78,34 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
         minX: 1, maxX: boardSize, minY: 1, maxY: boardSize
     };
 
-    // Visual Tuning Constants (Updated v6)
-    const LINE_WIDTH = 1;
-    const BORDER_WIDTH = 2;
-    const STONE_RADIUS = CELL_SIZE * 0.47;
-    const FONT_SIZE = CELL_SIZE * 0.4;
+    // Visual Tuning Constants (Updated v31: Dynamic + Star Fix)
+    const LINE_WIDTH = isMonochrome ? 2 : 1;
+    const BORDER_WIDTH = isMonochrome ? 4 : 2;
+    const STONE_RADIUS = CELL_SIZE * 0.46;
+    const FONT_SIZE = CELL_SIZE * 0.65;
     const COORD_FONT_SIZE = 14;
-    const STAR_POINT_RADIUS = 3;
+    const STAR_POINT_RADIUS = 3.5;
 
     const getStarPoints = (size: number) => {
-        if (size === 19) {
+        const s = Number(size);
+        if (s === 19) {
             return [
                 [4, 4], [10, 4], [16, 4],
                 [4, 10], [10, 10], [16, 10],
                 [4, 16], [10, 16], [16, 16]
             ];
-        } else if (size === 13) {
+        } else if (s === 13) {
             return [
                 [4, 4], [7, 4], [10, 4],
                 [4, 7], [7, 7], [10, 7],
                 [4, 10], [7, 10], [10, 10]
             ];
-        } else if (size === 9) {
+        } else if (s === 9) {
             return [
-                [3, 3], [7, 3], // 3,3 ? or 3,7
+                [3, 3], [7, 3],
                 [5, 5],
                 [3, 7], [7, 7]
             ];
-            // Standard 9x9 stars are 3-3, 3-7, 7-3, 7-7, 5-5.
-            // Coord 3 is 3rd line. 
-            // Yes.
         }
         return [];
     };
@@ -127,13 +132,28 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
         const x = MARGIN + (validMinX - 1) * CELL_SIZE - CELL_SIZE / 2;
         const y = MARGIN + (validMinY - 1) * CELL_SIZE - CELL_SIZE / 2;
         const width = (validMaxX - validMinX + 1) * CELL_SIZE;
-        const height = (validMaxY - validMinY + 1) * CELL_SIZE;
+        let height = (validMaxY - validMinY + 1) * CELL_SIZE;
+
+        let finalX = x;
+        let finalY = y;
+        let finalW = width;
+        let finalH = height;
 
         if (showCoordinates) {
-            return `${x - 25} ${y - 25} ${width + 50} ${height + 50}`;
+            finalX -= 25;
+            finalY -= 25;
+            finalW += 50;
+            finalH += 50;
         }
-        return `${x} ${y} ${width} ${height}`;
-    }, [effectiveViewRange, showCoordinates, boardSize]);
+
+        // Add footer space for hidden moves
+        if (hiddenMoves.length > 0) {
+            // Approx 20px height
+            finalH += 30;
+        }
+
+        return `${finalX} ${finalY} ${finalW} ${finalH}`;
+    }, [viewRange, showCoordinates, boardSize, hiddenMoves]);
 
     // Generate lines
     const lines = [];
@@ -154,6 +174,8 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                 strokeWidth={width}
                 vectorEffect="non-scaling-stroke"
                 strokeLinecap="square"
+                className="grid-line"
+                shapeRendering="crispEdges"
             />
         );
         lines.push(
@@ -165,6 +187,8 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                 strokeWidth={width}
                 vectorEffect="non-scaling-stroke"
                 strokeLinecap="square"
+                className="grid-line"
+                shapeRendering="crispEdges"
             />
         );
     }
@@ -183,13 +207,19 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
             const pos = MARGIN + (i - 1) * CELL_SIZE;
             // Top Labels
             coords.push(
-                <text key={`cx-${i}`} x={pos} y={MARGIN - 25} textAnchor="middle" fontSize={COORD_FONT_SIZE} fill="black" fontFamily="sans-serif">
+                <text
+                    key={`cx-${i}`} x={pos} y={MARGIN - 25} textAnchor="middle" fontSize={COORD_FONT_SIZE} fill="black" fontFamily="sans-serif" fontWeight="bold"
+                    style={{ WebkitFontSmoothing: 'none', fontSmooth: 'never' } as any}
+                >
                     {getLabel(i)}
                 </text>
             );
             // Left Labels
             coords.push(
-                <text key={`cy-${i}`} x={MARGIN - 25} y={pos + 5} textAnchor="middle" fontSize={COORD_FONT_SIZE} fill="black" fontFamily="sans-serif">
+                <text
+                    key={`cy-${i}`} x={MARGIN - 25} y={pos + 5} textAnchor="middle" fontSize={COORD_FONT_SIZE} fill="black" fontFamily="sans-serif" fontWeight="bold"
+                    style={{ WebkitFontSmoothing: 'none', fontSmooth: 'never' } as any}
+                >
                     {boardSize - i + 1}
                 </text>
             );
@@ -241,24 +271,31 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
 
             if (stone) {
                 const isBlack = stone.color === 'BLACK';
+                const label = specialLabels.find(l => l.x === x && l.y === y)?.label;
+                const displayText = label || stone.number?.toString();
+
                 cells.push(
                     <g key={`s-group-${x}-${y}`} className="pointer-events-none">
                         <circle
                             cx={cx} cy={cy} r={STONE_RADIUS}
                             fill={isBlack ? "black" : "white"}
-                            stroke={isBlack ? "none" : "black"}
-                            strokeWidth={isBlack ? 0 : 1}
+                            stroke={isBlack ? "black" : "black"}
+                            strokeWidth={isBlack ? 2 : 1}
+                            className={isBlack ? "black-stone" : "white-stone"}
+                        // Removed crispEdges from stones for smoothness
                         />
-                        {stone.number && (
+                        {displayText && (
                             <text
                                 x={cx} y={cy}
                                 dy=".35em"
                                 textAnchor="middle"
                                 fill={isBlack ? "white" : "black"}
                                 fontSize={FONT_SIZE}
-                                fontFamily="sans-serif"
+                                fontFamily="Arial, sans-serif"
+                                fontWeight="bold"
+                                style={{ WebkitFontSmoothing: 'none', fontSmooth: 'never' } as any}
                             >
-                                {stone.number}
+                                {displayText}
                             </text>
                         )}
                     </g>
@@ -289,12 +326,14 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
 
             selectionRect = (
                 <rect
-                    data-export-ignore="true"
+                    key="selection-rect-overlay"
                     x={sx} y={sy} width={w} height={h}
                     fill="rgba(0, 0, 255, 0.2)"
                     stroke="blue"
                     strokeWidth={2}
                     pointerEvents="none"
+                    className="selection-overlay"
+                    id="selection-overlay-rect"
                 />
             );
         }
@@ -330,11 +369,59 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                     cy={MARGIN + (sy - 1) * CELL_SIZE}
                     r={STAR_POINT_RADIUS}
                     fill="black"
+                // Removed crispEdges from stars for smoothness
                 />
             ))}
 
             {cells}
             {selectionRect}
+
+            {/* Footer Text for Hidden Moves */}
+            {hiddenMoves.length > 0 && (() => {
+                const { minX, maxX: _, minY: __, maxY } = viewRange || { minX: 1, maxX: boardSize, minY: 1, maxY: boardSize };
+                const validMinX = Math.max(1, minX);
+                const validMaxY = Math.min(boardSize, maxY);
+
+                // Start Position: Below board
+                const startX = MARGIN + (validMinX - 1) * CELL_SIZE - CELL_SIZE / 2 + (showCoordinates ? -25 : 0) + 10;
+                const startY = MARGIN + (validMaxY - 1) * CELL_SIZE + CELL_SIZE / 2 + (showCoordinates ? 25 : 0) + 20;
+
+                const ITEM_SPACING = 120; // Space between each "N [M]" group
+                const RADIUS = 14;
+                const FONT = 12;
+
+                return (
+                    <g transform={`translate(${startX}, ${startY})`}>
+                        {hiddenMoves.map((ref, i) => {
+                            const x = (i % 4) * ITEM_SPACING;
+                            const y = Math.floor(i / 4) * 40;
+
+                            const lColor = ref.left.color;
+                            const rColor = ref.right.color; // might be undefined if label only? No, user shows stone A.
+
+                            return (
+                                <g key={`hm-${i}`} transform={`translate(${x}, ${y})`}>
+                                    {/* Left Stone */}
+                                    <circle cx={15} cy={0} r={RADIUS} fill={lColor === 'BLACK' ? 'black' : 'white'} stroke="black" strokeWidth={1} />
+                                    <text x={15} y={0} dy=".35em" textAnchor="middle" fill={lColor === 'BLACK' ? 'white' : 'black'} fontSize={FONT} fontFamily="sans-serif">{ref.left.text}</text>
+
+                                    {/* Bracket Open */}
+                                    <text x={35} y={5} fontSize="16" fill="black" fontFamily="sans-serif">[</text>
+
+                                    {/* Right Stone (Label) */}
+                                    {/* User example shows Stone A. So we always render stone for Right side too? */}
+                                    {/* Yes, '7 [ A ]' -> Stone 7, Stone A. */}
+                                    <circle cx={55} cy={0} r={RADIUS} fill={rColor === 'BLACK' ? 'black' : 'white'} stroke="black" strokeWidth={1} />
+                                    <text x={55} y={0} dy=".35em" textAnchor="middle" fill={rColor === 'BLACK' ? 'white' : 'black'} fontSize={FONT} fontFamily="sans-serif">{ref.right.text}</text>
+
+                                    {/* Bracket Close */}
+                                    <text x={75} y={5} fontSize="16" fill="black" fontFamily="sans-serif">]</text>
+                                </g>
+                            );
+                        })}
+                    </g>
+                );
+            })()}
         </svg>
     );
 });
