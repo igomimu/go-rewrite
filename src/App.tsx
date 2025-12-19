@@ -553,19 +553,42 @@ function App() {
                     });
                 });
             } else if (moves.length > 1) {
-                // Collision! Assign Auto Label.
-                const label = alphabet[labelIndex % alphabet.length];
-                labelIndex++;
+                // Collision handling Refined (Step 2110)
+                // Filter actual moves vs setup stones
+                const setupMoves = moves.filter(m => m.number <= 0);
+                const numberedMoves = moves.filter(m => m.number > 0);
 
-                labels.push({ x: x + 1, y: y + 1, label }); // 1-based for props
+                // Sort numbered moves ascending
+                numberedMoves.sort((a, b) => a.number - b.number);
 
-                // Add all moves at this spot to footer
-                moves.forEach(m => {
+                // Most recent move (visible on board)
+                const topMove = numberedMoves.length > 0 ? numberedMoves[numberedMoves.length - 1] : moves[moves.length - 1];
+
+                if (setupMoves.length > 0) {
+                    // Case: Collision with Setup Stone.
+                    // User Request: "Write A on N's location" and legend "N [ A ]". Omit "Init [ A ]" line.
+                    const label = alphabet[labelIndex % alphabet.length];
+                    labelIndex++;
+                    labels.push({ x: x + 1, y: y + 1, label });
+
+                    // Legend: Current Move -> Label
+                    // Right color should match the hidden Setup stone to indicate what was there.
+                    const hiddenSetup = setupMoves[0];
                     footer.push({
-                        left: { text: getMoveText(m.number), color: m.color },
-                        right: { text: label, color: m.color }
+                        left: { text: getMoveText(topMove.number), color: topMove.color },
+                        right: { text: label, color: hiddenSetup.color }
                     });
-                });
+                } else {
+                    // Case: Pure Numbered Collision (e.g. 10 on 6).
+                    // Use GOWrite style: 10 [ 6 ]. Direct reference. No Label A.
+                    const prevMove = numberedMoves[numberedMoves.length - 2];
+                    if (prevMove) {
+                        footer.push({
+                            left: { text: getMoveText(topMove.number), color: topMove.color },
+                            right: { text: getMoveText(prevMove.number), color: prevMove.color }
+                        });
+                    }
+                }
             } else {
                 // Single move case.
                 const m = moves[0];
