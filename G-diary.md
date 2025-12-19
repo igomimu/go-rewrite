@@ -12,7 +12,7 @@
 - **Double-Click Color Swap**:
     - **Numbered Mode**: Toggles last placed stone color.
     - **Stone (Simple) Mode**: Double-clicking an existing stone toggles its color immediately and updates the active tool color to matched the toggled color.
-- **UI Restoration**: Restored missing Tool Mode buttons (Stone/Label/Symbol).
+- **UI Simplification**: Removed Manual Tool Mode buttons (Stone/Label/Symbol) to reduce clutter, as Auto-Detection handles labeling needs.
 - **Double-Click Color Swap**: In Numbered Mode, double-clicking the last placed stone toggles its color (Black/White).
 - **UI Restoration**: Restored missing Tool Mode buttons (Stone/Label/Symbol).
 - **UI Restoration**: Restored missing Tool Mode buttons (Stone/Label/Symbol).
