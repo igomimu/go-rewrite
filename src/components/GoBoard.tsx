@@ -79,9 +79,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
     onDragEnd,
     hiddenMoves = [],
     specialLabels = [],
-    markers = [],
-    nextNumber = 1,
-    activeColor = 'BLACK'
+    markers = []
 }, ref) => {
     const CELL_SIZE = 40;
     const MARGIN = 40;
@@ -168,13 +166,8 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
             finalH += footerHeight + footerSpacing + footerPadding;
         }
 
-        // Add footer space for Legend (if labels exist)
-        if (markers.some(m => m.type === 'LABEL')) {
-            finalH += 80;
-        }
-
         return `${finalX} ${finalY} ${finalW} ${finalH}`;
-    }, [viewRange, showCoordinates, boardSize, hiddenMoves, markers]);
+    }, [viewRange, showCoordinates, boardSize, hiddenMoves]);
 
     // Generate lines
     const lines = [];
@@ -494,78 +487,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                 );
             })()}
 
-            {/* Legend Footer */}
-            {markers.some(m => m.type === 'LABEL') && (() => {
-                const { maxY } = viewRange || { minX: 1, maxX: boardSize, minY: 1, maxY: boardSize };
-                const validMaxY = Math.min(boardSize, maxY);
-                const boardWidthPixels = (boardSize - 1) * CELL_SIZE + 2 * MARGIN;
 
-                // Calculate Y Position
-                let startY = MARGIN + (validMaxY - 1) * CELL_SIZE + CELL_SIZE / 2 + (showCoordinates ? 25 : 0) + 40;
-                if (hiddenMoves.length > 0) {
-                    const rows = Math.ceil(hiddenMoves.length / 4);
-                    startY += rows * 40 + 40;
-                }
-
-                const labels = markers.filter(m => m.type === 'LABEL');
-                const itemSpacing = 160;
-                const totalWidth = labels.length * itemSpacing;
-                const centerX = boardWidthPixels / 2;
-                const startX = centerX - (totalWidth / 2) + (itemSpacing / 2);
-
-                return labels.map((m, i) => {
-                    const lx = startX + i * itemSpacing;
-                    return (
-                        <g key={`legend-${i}`}>
-                            {/* Next Move Stone */}
-                            <circle
-                                cx={lx - 40} cy={startY}
-                                r={STONE_RADIUS}
-                                fill={activeColor === 'BLACK' ? 'black' : 'white'}
-                                stroke="black"
-                                strokeWidth={activeColor === 'WHITE' ? 1 : 0}
-                            />
-                            <text
-                                x={lx - 40} y={startY}
-                                dy=".35em"
-                                textAnchor="middle"
-                                fill={activeColor === 'BLACK' ? 'white' : 'black'}
-                                fontSize={FONT_SIZE}
-                                fontWeight="bold"
-                                fontFamily="Arial, sans-serif"
-                            >
-                                {nextNumber}
-                            </text>
-
-                            {/* Bracket [ */}
-                            <text x={lx - 10} y={startY} dy=".35em" textAnchor="middle" fontSize="24" fontWeight="bold">[</text>
-
-                            {/* Label Stone */}
-                            <circle
-                                cx={lx + 20} cy={startY}
-                                r={STONE_RADIUS}
-                                fill={activeColor === 'BLACK' ? 'black' : 'white'}
-                                stroke="black"
-                                strokeWidth={activeColor === 'WHITE' ? 1 : 0}
-                            />
-                            <text
-                                x={lx + 20} y={startY}
-                                dy=".35em"
-                                textAnchor="middle"
-                                fill={activeColor === 'BLACK' ? 'white' : 'black'}
-                                fontSize={FONT_SIZE}
-                                fontWeight="bold"
-                                fontFamily="Arial, sans-serif"
-                            >
-                                {m.value}
-                            </text>
-
-                            {/* Bracket ] */}
-                            <text x={lx + 50} y={startY} dy=".35em" textAnchor="middle" fontSize="24" fontWeight="bold">]</text>
-                        </g>
-                    );
-                });
-            })()}
         </svg>
     );
 });

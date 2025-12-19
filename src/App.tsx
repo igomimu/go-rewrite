@@ -440,16 +440,30 @@ function App() {
         const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
         const currentBoard = history[currentMoveIndex].board;
+        const currentMarkers = history[currentMoveIndex].markers || [];
+        const manualLabelMap = new Map<string, string>();
+        currentMarkers.forEach(m => {
+            if (m.type === 'LABEL') {
+                manualLabelMap.set(`${m.x - 1},${m.y - 1}`, m.value);
+            }
+        });
 
         // We iterate all locations that had stones
         moveHistory.forEach((moves, key) => {
             const [x, y] = key.split(',').map(Number);
             const currentStone = currentBoard[y][x];
+            const manualLabel = manualLabelMap.get(key);
 
-            // Condition for Special Labeling:
-            // 1. More than 1 move played here (Collision)
-            if (moves.length > 1) {
-                // Collision! Assign Label.
+            if (manualLabel) {
+                // Manual Label takes precedence. List ALL moves at this spot.
+                moves.forEach(m => {
+                    footer.push({
+                        left: { text: m.number.toString(), color: m.color },
+                        right: { text: manualLabel, color: m.color }
+                    });
+                });
+            } else if (moves.length > 1) {
+                // Collision! Assign Auto Label.
                 const label = alphabet[labelIndex % alphabet.length];
                 labelIndex++;
 
