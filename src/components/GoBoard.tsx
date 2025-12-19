@@ -79,8 +79,8 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
     };
 
     // Visual Tuning Constants (Updated v31: Dynamic + Star Fix)
-    const LINE_WIDTH = isMonochrome ? 2 : 1;
-    const BORDER_WIDTH = isMonochrome ? 4 : 2;
+    const LINE_WIDTH = 1;
+    const BORDER_WIDTH = 2;
     const STONE_RADIUS = CELL_SIZE * 0.46;
     const FONT_SIZE = CELL_SIZE * 0.65;
     const COORD_FONT_SIZE = 14;
@@ -272,7 +272,8 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
             if (stone) {
                 const isBlack = stone.color === 'BLACK';
                 const label = specialLabels.find(l => l.x === x && l.y === y)?.label;
-                const displayText = label || stone.number?.toString();
+                // Prioritize number if present (User prefers "Black 1" over "Black A")
+                const displayText = stone.number?.toString() || label;
 
                 cells.push(
                     <g key={`s-group-${x}-${y}`} className="pointer-events-none">
@@ -280,7 +281,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                             cx={cx} cy={cy} r={STONE_RADIUS}
                             fill={isBlack ? "black" : "white"}
                             stroke={isBlack ? "black" : "black"}
-                            strokeWidth={isBlack ? 2 : 1}
+                            strokeWidth={isBlack ? 2 : 0.7}
                             className={isBlack ? "black-stone" : "white-stone"}
                         // Removed crispEdges from stones for smoothness
                         />
@@ -391,7 +392,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                 const FONT = 12;
 
                 return (
-                    <g transform={`translate(${startX}, ${startY})`}>
+                    <g id="footer-group" transform={`translate(${startX}, ${startY})`}>
                         {hiddenMoves.map((ref, i) => {
                             const x = (i % 4) * ITEM_SPACING;
                             const y = Math.floor(i / 4) * 40;

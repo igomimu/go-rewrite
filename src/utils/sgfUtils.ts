@@ -13,7 +13,9 @@ import { BoardState, StoneColor } from "../components/GoBoard";
 
 // Convert Grid (1-based) to SGF Coordinate (a-s)
 // e.g. 1->a, 19->s
-function toSgfCoord(c: number): string {
+// Convert Grid (1-based) to SGF Coordinate (a-s)
+// e.g. 1->a, 19->s
+export function toSgfCoord(c: number): string {
     if (c < 1 || c > 26) return '';
     return String.fromCharCode(96 + c); // 'a' is 97. 96+1 = 97.
 }
@@ -24,61 +26,62 @@ function fromSgfCoord(c: string): number {
     return code - 96; // 'a'(97) - 96 = 1.
 }
 
-export function generateSGF(board: BoardState, size: number): string {
+export interface SgfNode {
+    type: 'MOVE' | 'SETUP';
+    // For MOVE
+    color?: StoneColor;
+    coord?: string;
+    number?: number;
+    // For SETUP
+    ab?: string[];
+    aw?: string[];
+    ae?: string[];
+}
+
+export function generateSGF(initialBoard: BoardState, size: number, nodes: SgfNode[]): string {
+    let sgf = `(;GM[1]FF[4]SZ[${size}]`;
+
+    // 1. Initial Setup (AB/AW) from initialBoard
     const ab: string[] = [];
     const aw: string[] = [];
-    const moves: { number: number, color: StoneColor, coord: string }[] = [];
 
-
-    // 1. Scan Board
     for (let y = 1; y <= size; y++) {
         for (let x = 1; x <= size; x++) {
-            const stone = board[y - 1][x - 1];
+            const stone = initialBoard[y - 1][x - 1];
             if (stone) {
-                const coord = `${toSgfCoord(x)}${toSgfCoord(y)}`;
-
-                if (stone.number) {
-                    // It's a Move (Numbered)
-                    moves.push({
-                        number: stone.number,
-                        color: stone.color,
-                        coord: coord
-                    });
-                } else {
-                    // It's Setup (Simple / Unnumbered)
-                    if (stone.color === 'BLACK') {
-                        ab.push(coord);
-                    } else {
-                        aw.push(coord);
-                    }
-                }
+                const c = `${toSgfCoord(x)}${toSgfCoord(y)}`;
+                if (stone.color === 'BLACK') ab.push(c);
+                else aw.push(c);
             }
         }
     }
 
-    // 2. Sort Moves by Number
-    moves.sort((a, b) => a.number - b.number);
+    if (ab.length > 0) sgf += `AB` + ab.map(c => `[${c}]`).join('');
+    if (aw.length > 0) sgf += `AW` + aw.map(c => `[${c}]`).join('');
 
-    // 3. Construct SGF
-    let sgf = `(;GM[1]FF[4]SZ[${size}]`;
+    // 2. Append Nodes
+    for (const node of nodes) {
+        let nodeStr = ';';
+        if (node.type === 'MOVE') {
+            const c = node.color === 'BLACK' ? 'B' : 'W';
+            // If coord is empty/missing, it's a pass? Or just omit.
+            // But usually we have a coord.
+            nodeStr += `${c}[${node.coord || ''}]`;
+            // Optional: Comment with move number?
+            // nodeStr += `C[${node.number}]`; 
+        }
 
-    // Add Setup Stones
-    if (ab.length > 0) {
-        sgf += `AB` + ab.map(c => `[${c}]`).join('');
-    }
-    if (aw.length > 0) {
-        sgf += `AW` + aw.map(c => `[${c}]`).join('');
-    }
+        // Setup properties (AB/AW/AE) can be on Move nodes or standalone SGF nodes.
+        // Usually edits happen in between moves. SGF Move Node can *also* have AB/AW, 
+        // but typically edits are separate nodes or attached to the move.
+        // Let's attach if present.
+        if (node.ab && node.ab.length > 0) nodeStr += `AB` + node.ab.map(c => `[${c}]`).join('');
+        if (node.aw && node.aw.length > 0) nodeStr += `AW` + node.aw.map(c => `[${c}]`).join('');
+        if (node.ae && node.ae.length > 0) nodeStr += `AE` + node.ae.map(c => `[${c}]`).join('');
 
-    // Add Moves
-    // Note: SGF moves are nodes ";B[xx]" or ";W[xx]".
-    // We append them sequentially.
-    for (const move of moves) {
-        const c = move.color === 'BLACK' ? 'B' : 'W';
-        sgf += `;${c}[${move.coord}]`;
-        // Optional: Add Label property to the move node if we want to force the number to appear in viewers that support it?
-        // But GORewrite uses the move number naturally.
-        // Standard viewers display move numbers.
+        if (nodeStr !== ';') {
+            sgf += nodeStr;
+        }
     }
 
     sgf += `)`;
