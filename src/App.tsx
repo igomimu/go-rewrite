@@ -705,6 +705,8 @@ function App() {
             if (isMove) {
                 let moveCoord = '';
                 let moveColor: StoneColor = 'BLACK';
+                let moveX = -1;
+                let moveY = -1;
 
                 for (let y = 0; y < size; y++) {
                     for (let x = 0; x < size; x++) {
@@ -712,9 +714,26 @@ function App() {
                         if (s && s.number === moveNumber) {
                             moveCoord = `${toSgfCoord(x + 1)}${toSgfCoord(y + 1)}`;
                             moveColor = s.color;
+                            moveX = x;
+                            moveY = y;
                             break;
                         }
                     }
+                }
+
+                // Calculate natural captures to exclude them from AE
+                const naturalCaptureSet = new Set<string>();
+                if (moveX !== -1) {
+                    // Simulate move on previous board
+                    const tempBoard = prev.board.map(r => [...r]);
+                    // Only place if empty? Standard move assumes empty. 
+                    // But here we are just checking captures logic.
+                    tempBoard[moveY][moveX] = { color: moveColor };
+
+                    const captures = checkCaptures(tempBoard, moveX, moveY, moveColor);
+                    captures.forEach(c => {
+                        naturalCaptureSet.add(`${toSgfCoord(c.x + 1)}${toSgfCoord(c.y + 1)}`);
+                    });
                 }
 
                 const ae: string[] = [];
@@ -733,7 +752,10 @@ function App() {
 
                         if (!same) {
                             if (sPrev && !sCurr) {
-                                ae.push(c);
+                                // Stone removed. Check if it's a natural capture.
+                                if (!naturalCaptureSet.has(c)) {
+                                    ae.push(c);
+                                }
                             } else if (!sPrev && sCurr) {
                                 if (sCurr.number === moveNumber && c === moveCoord) {
                                     // Move stone
