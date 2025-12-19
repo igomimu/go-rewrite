@@ -22,6 +22,13 @@ export interface Stone {
 
 export type BoardState = (Stone | null)[][];
 
+export interface Marker {
+    x: number;
+    y: number;
+    type: 'LABEL' | 'SYMBOL';
+    value: string; // 'A'...'Z' or 'TRI','CIR','SQR','X'
+}
+
 export interface GoBoardProps {
     boardState: BoardState;
     boardSize: number; // 19, 13, 9
@@ -49,6 +56,7 @@ export interface GoBoardProps {
         right: { text: string, color?: StoneColor, isLabel?: boolean };
     }[];
     specialLabels?: { x: number, y: number, label: string }[];
+    markers?: Marker[];
 }
 
 const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
@@ -68,7 +76,8 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
     onDragMove,
     onDragEnd,
     hiddenMoves = [],
-    specialLabels = []
+    specialLabels = [],
+    markers = []
 }, ref) => {
     const CELL_SIZE = 40;
     const MARGIN = 40;
@@ -308,6 +317,54 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
         }
     }
 
+    // Markers (Labels / Symbols)
+    const markerElements: JSX.Element[] = [];
+    if (markers) {
+        markers.forEach((m, i) => {
+            const cx = MARGIN + (m.x - 1) * CELL_SIZE;
+            const cy = MARGIN + (m.y - 1) * CELL_SIZE;
+            const stone = boardState[m.y - 1]?.[m.x - 1];
+            const isBlackStone = stone?.color === 'BLACK';
+            const baseColor = isBlackStone ? 'white' : 'black';
+
+            if (m.type === 'LABEL') {
+                markerElements.push(
+                    <text
+                        key={`mk-lbl-${i}`}
+                        x={cx} y={cy}
+                        dy=".35em"
+                        textAnchor="middle"
+                        fontSize={FONT_SIZE}
+                        fill={baseColor}
+                        fontFamily="Arial, sans-serif"
+                        fontWeight="bold"
+                        style={{ pointerEvents: 'none', userSelect: 'none' } as React.CSSProperties}
+                    >
+                        {m.value}
+                    </text>
+                );
+            } else if (m.type === 'SYMBOL') {
+                const r = CELL_SIZE * 0.25;
+                if (m.value === 'SQR') {
+                    markerElements.push(<rect key={`mk-sym-${i}`} x={cx - r} y={cy - r} width={r * 2} height={r * 2} stroke={baseColor} strokeWidth={2} fill="none" pointerEvents="none" />);
+                } else if (m.value === 'TRI') {
+                    const points = `${cx},${cy - r} ${cx + r * 0.866},${cy + r * 0.5} ${cx - r * 0.866},${cy + r * 0.5}`;
+                    markerElements.push(<polygon key={`mk-sym-${i}`} points={points} stroke={baseColor} strokeWidth={2} fill="none" pointerEvents="none" />);
+                } else if (m.value === 'CIR') {
+                    markerElements.push(<circle key={`mk-sym-${i}`} cx={cx} cy={cy} r={r} stroke={baseColor} strokeWidth={2} fill="none" pointerEvents="none" />);
+                } else if (m.value === 'X') {
+                    const d = r * 0.8;
+                    markerElements.push(
+                        <g key={`mk-sym-${i}`} stroke={baseColor} strokeWidth={2} pointerEvents="none">
+                            <line x1={cx - d} y1={cy - d} x2={cx + d} y2={cy + d} />
+                            <line x1={cx + d} y1={cy - d} x2={cx - d} y2={cy + d} />
+                        </g>
+                    );
+                }
+            }
+        });
+    }
+
     // Selection Overlay
     let selectionRect = null;
     if (selectionStart && selectionEnd) {
@@ -378,6 +435,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
             ))}
 
             {cells}
+            {markerElements}
             {selectionRect}
 
             {/* Footer Text for Hidden Moves */}

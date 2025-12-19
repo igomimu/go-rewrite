@@ -36,6 +36,11 @@ export interface SgfNode {
     ab?: string[];
     aw?: string[];
     ae?: string[];
+    lb?: string[]; // Label [aa:A]
+    tr?: string[]; // Triangle
+    cr?: string[]; // Circle
+    sq?: string[]; // Square
+    ma?: string[]; // Mark (X)
 }
 
 export function generateSGF(initialBoard: BoardState, size: number, nodes: SgfNode[]): string {
@@ -78,6 +83,13 @@ export function generateSGF(initialBoard: BoardState, size: number, nodes: SgfNo
         if (node.ab && node.ab.length > 0) nodeStr += `AB` + node.ab.map(c => `[${c}]`).join('');
         if (node.aw && node.aw.length > 0) nodeStr += `AW` + node.aw.map(c => `[${c}]`).join('');
         if (node.ae && node.ae.length > 0) nodeStr += `AE` + node.ae.map(c => `[${c}]`).join('');
+
+        // Annotations
+        if (node.lb && node.lb.length > 0) nodeStr += `LB` + node.lb.map(c => `[${c}]`).join('');
+        if (node.tr && node.tr.length > 0) nodeStr += `TR` + node.tr.map(c => `[${c}]`).join('');
+        if (node.cr && node.cr.length > 0) nodeStr += `CR` + node.cr.map(c => `[${c}]`).join('');
+        if (node.sq && node.sq.length > 0) nodeStr += `SQ` + node.sq.map(c => `[${c}]`).join('');
+        if (node.ma && node.ma.length > 0) nodeStr += `MA` + node.ma.map(c => `[${c}]`).join('');
 
         if (nodeStr !== ';') {
             sgf += nodeStr;

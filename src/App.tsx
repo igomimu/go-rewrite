@@ -1,16 +1,20 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import GoBoard, { ViewRange, BoardState, StoneColor } from './components/GoBoard'
+import GoBoard, { ViewRange, BoardState, StoneColor, Marker } from './components/GoBoard'
 import { exportToPng } from './utils/exportUtils'
 import { checkCaptures } from './utils/gameLogic'
 import { parseSGF, generateSGF } from './utils/sgfUtils'
 
 type PlacementMode = 'SIMPLE' | 'NUMBERED';
 
+export type ToolMode = 'STONE' | 'LABEL' | 'SYMBOL';
+export type SymbolType = 'TRI' | 'CIR' | 'SQR' | 'X';
+
 interface HistoryState {
     board: BoardState;
     nextNumber: number;
     activeColor: StoneColor;
-    boardSize: number; // Size is part of history state? Yes, if we switch size, we want to undo it.
+    boardSize: number;
+    markers?: Marker[];
 }
 
 function App() {
@@ -27,12 +31,17 @@ function App() {
         }
     };
 
+    const [toolMode, setToolMode] = useState<ToolMode>('STONE');
+    const [nextLabelChar, setNextLabelChar] = useState<string>('A');
+    const [selectedSymbol, setSelectedSymbol] = useState<SymbolType>('TRI');
+
     const [history, setHistory] = useState<HistoryState[]>([
         {
             board: Array(INITIAL_SIZE).fill(null).map(() => Array(INITIAL_SIZE).fill(null)),
             nextNumber: 1,
             activeColor: getInitialColor(),
-            boardSize: INITIAL_SIZE
+            boardSize: INITIAL_SIZE,
+            markers: []
         }
     ]);
     const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
@@ -83,7 +92,7 @@ function App() {
     const dragStartRef = useRef<{ x: number, y: number } | null>(null);
     const hoveredCellRef = useRef<{ x: number, y: number } | null>(null);
 
-    const commitState = (newBoard: BoardState, newNextNumber: number, newActiveColor: StoneColor, newSize: number) => {
+    const commitState = (newBoard: BoardState, newNextNumber: number, newActiveColor: StoneColor, newSize: number, newMarkers?: Marker[]) => {
         // Persist active color logic
         // We only persist the "current" active color for next session reload.
         try {
@@ -95,7 +104,8 @@ function App() {
             board: newBoard,
             nextNumber: newNextNumber,
             activeColor: newActiveColor,
-            boardSize: newSize
+            boardSize: newSize,
+            markers: newMarkers ?? (history[currentMoveIndex]?.markers || [])
         });
         setHistory(newHistory);
         setCurrentMoveIndex(newHistory.length - 1);
@@ -106,7 +116,7 @@ function App() {
         // Create clean board of new size
         const newBoard = Array(size).fill(null).map(() => Array(size).fill(null));
         // Reset number to 1? Or keep? Usually fresh board = fresh start.
-        commitState(newBoard, 1, 'BLACK', size);
+        commitState(newBoard, 1, 'BLACK', size, []);
     };
 
 
@@ -121,6 +131,32 @@ function App() {
         if (selectionStart && selectionEnd) {
             setSelectionStart(null);
             setSelectionEnd(null);
+        }
+
+        // Handle Markers
+        if (toolMode === 'LABEL' || toolMode === 'SYMBOL') {
+            const currentMarkers = history[currentMoveIndex].markers || [];
+            // Check if marker exists
+            const existingIndex = currentMarkers.findIndex(m => m.x === x && m.y === y);
+            const newMarkers = [...currentMarkers];
+
+            if (existingIndex !== -1) {
+                // Remove (Toggle off)
+                newMarkers.splice(existingIndex, 1);
+            } else {
+                // Add
+                if (toolMode === 'LABEL') {
+                    newMarkers.push({ x, y, type: 'LABEL', value: nextLabelChar });
+                    // Increment Char for next click
+                    const nextChar = String.fromCharCode(nextLabelChar.charCodeAt(0) + 1);
+                    setNextLabelChar(nextChar);
+                } else {
+                    newMarkers.push({ x, y, type: 'SYMBOL', value: selectedSymbol });
+                }
+            }
+            const currentBoard = history[currentMoveIndex].board;
+            commitState(currentBoard, nextNumber, activeColor, boardSize, newMarkers);
+            return;
         }
 
         const currentStone = board[y - 1][x - 1];
@@ -233,29 +269,14 @@ function App() {
             }
         }
 
-        // Priority 2: Simple Mode Stone Conversion (No Tool Swap)
-        if (mode === 'SIMPLE') {
-            if (hoveredCellRef.current) {
-                const { x, y } = hoveredCellRef.current;
-                const stone = board[y - 1][x - 1];
-                if (stone) {
-                    // Swap stone color across history (Simple Mode Logic)
-                    const newHistory = history.map(step => {
-                        const cell = step.board[y - 1][x - 1];
-                        if (cell && cell.number) return step; // Preserve numbered moves
-
-                        const stepBoard = step.board.map(r => [...r]);
-                        const s = stepBoard[y - 1][x - 1];
-                        if (s) {
-                            stepBoard[y - 1][x - 1] = { ...s, color: s.color === 'BLACK' ? 'WHITE' : 'BLACK' };
-                        }
-                        return { ...step, board: stepBoard };
-                    });
-                    setHistory(newHistory);
-                    return;
-                }
-            }
-            return; // Do nothing on background double click
+        // Priority 2: Setup Mode Color Toggle (Switch Tool)
+        if (mode === 'SIMPLE' && toolMode === 'STONE') {
+            const newColor = activeColor === 'BLACK' ? 'WHITE' : 'BLACK';
+            const newHistory = [...history];
+            newHistory[currentMoveIndex] = { ...newHistory[currentMoveIndex], activeColor: newColor };
+            setHistory(newHistory);
+            try { localStorage.setItem('gorw_active_color', newColor); } catch (e) { /* ignore */ }
+            return;
         }
 
         // Priority 3: Stone Swap (Numbered Mode)
@@ -776,14 +797,32 @@ function App() {
                     }
                 }
 
+                // Prepare Annotations
+                const lb: string[] = [];
+                const tr: string[] = [];
+                const cr: string[] = [];
+                const sq: string[] = [];
+                const ma: string[] = [];
+                if (curr.markers) {
+                    curr.markers.forEach(m => {
+                        const c = `${toSgfCoord(m.x)}${toSgfCoord(m.y)}`;
+                        if (m.type === 'LABEL') lb.push(`${c}:${m.value}`);
+                        else if (m.type === 'SYMBOL') {
+                            if (m.value === 'TRI') tr.push(c);
+                            else if (m.value === 'CIR') cr.push(c);
+                            else if (m.value === 'SQR') sq.push(c);
+                            else if (m.value === 'X') ma.push(c);
+                        }
+                    });
+                }
+
                 nodes.push({
                     type: 'MOVE',
                     color: moveColor,
                     coord: moveCoord,
                     number: moveNumber,
-                    ae: ae,
-                    ab: ab,
-                    aw: aw
+                    ae, ab, aw,
+                    lb, tr, cr, sq, ma
                 });
 
             } else {
@@ -811,10 +850,30 @@ function App() {
                     }
                 }
 
-                if (ae.length > 0 || ab.length > 0 || aw.length > 0) {
+                // Prepare Annotations
+                const lb: string[] = [];
+                const tr: string[] = [];
+                const cr: string[] = [];
+                const sq: string[] = [];
+                const ma: string[] = [];
+                if (curr.markers) {
+                    curr.markers.forEach(m => {
+                        const c = `${toSgfCoord(m.x)}${toSgfCoord(m.y)}`;
+                        if (m.type === 'LABEL') lb.push(`${c}:${m.value}`);
+                        else if (m.type === 'SYMBOL') {
+                            if (m.value === 'TRI') tr.push(c);
+                            else if (m.value === 'CIR') cr.push(c);
+                            else if (m.value === 'SQR') sq.push(c);
+                            else if (m.value === 'X') ma.push(c);
+                        }
+                    });
+                }
+
+                if (ae.length > 0 || ab.length > 0 || aw.length > 0 || lb.length > 0 || tr.length > 0 || cr.length > 0 || sq.length > 0 || ma.length > 0) {
                     nodes.push({
                         type: 'SETUP',
-                        ae, ab, aw
+                        ae, ab, aw,
+                        lb, tr, cr, sq, ma
                     });
                 }
             }
@@ -1395,6 +1454,7 @@ function App() {
                         className={`p-2 rounded-full transition-all ${mode === 'SIMPLE' && activeColor === 'BLACK' ? 'bg-blue-100 ring-2 ring-blue-500 scale-110' : 'hover:bg-gray-100 opacity-60 hover:opacity-100'}`}
                         onClick={() => {
                             setMode('SIMPLE');
+                            setToolMode('STONE');
                             const newHistory = [...history];
                             newHistory[currentMoveIndex] = { ...newHistory[currentMoveIndex], activeColor: 'BLACK' };
                             setHistory(newHistory);
@@ -1411,6 +1471,7 @@ function App() {
                         className={`p-2 rounded-full transition-all ${mode === 'SIMPLE' && activeColor === 'WHITE' ? 'bg-blue-100 ring-2 ring-blue-500 scale-110' : 'hover:bg-gray-100 opacity-60 hover:opacity-100'}`}
                         onClick={() => {
                             setMode('SIMPLE');
+                            setToolMode('STONE');
                             const newHistory = [...history];
                             newHistory[currentMoveIndex] = { ...newHistory[currentMoveIndex], activeColor: 'WHITE' };
                             setHistory(newHistory);
@@ -1428,7 +1489,10 @@ function App() {
                     <button
                         title="Numbered Mode"
                         className={`p-2 rounded-full transition-all ${mode === 'NUMBERED' ? 'bg-blue-100 ring-2 ring-blue-500 scale-110' : 'hover:bg-gray-100 opacity-60 hover:opacity-100'}`}
-                        onClick={() => setMode('NUMBERED')}
+                        onClick={() => {
+                            setMode('NUMBERED');
+                            setToolMode('STONE');
+                        }}
                     >
                         <svg width="24" height="24" viewBox="0 0 24 24" className="text-black">
                             {/* Dynamic color for icon? activeColor? 
@@ -1438,6 +1502,36 @@ function App() {
                             <text x="12" y="17" textAnchor="middle" fill="white" fontSize="14" fontWeight="bold" fontFamily="sans-serif">1</text>
                         </svg>
                     </button>
+                </div>
+
+                {/* Annotation Tools */}
+                <div className="flex items-center justify-center space-x-2 border-b pb-2">
+                    {/* Label Mode */}
+                    <button
+                        title="Label Mode (A, B, C...)"
+                        onClick={() => setToolMode('LABEL')}
+                        className={`w-8 h-8 rounded font-bold border flex items-center justify-center transition-all ${toolMode === 'LABEL' ? 'bg-blue-100 border-blue-500 text-blue-700' : 'bg-white border-gray-300 hover:bg-gray-100'}`}
+                    >
+                        A
+                    </button>
+
+                    {/* Symbol Mode Dropdown */}
+                    <select
+                        title="Symbol Mode"
+                        value={toolMode === 'SYMBOL' ? selectedSymbol : ''}
+                        onChange={(e) => {
+                            const val = e.target.value as SymbolType;
+                            setSelectedSymbol(val);
+                            setToolMode('SYMBOL');
+                        }}
+                        className={`h-8 rounded border px-1 text-sm bg-white cursor-pointer transition-all ${toolMode === 'SYMBOL' ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-300'}`}
+                    >
+                        <option value="" disabled hidden>記号</option>
+                        <option value="TRI">△</option>
+                        <option value="CIR">◯</option>
+                        <option value="SQR">□</option>
+                        <option value="X">✕</option>
+                    </select>
                 </div>
 
                 {/* Tools: Next, Coords, Size */}
