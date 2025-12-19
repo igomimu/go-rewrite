@@ -8,13 +8,11 @@
 - **Hidden Move Legend**: Implemented support for Manual Labels. Fixed issue where footer/labels were missing due to unpassed props. Added **Auto-Detection for Setup Stones** (collisions with initial state now appear automatically as `(Init)`).
     - **Update v32.0**: Switched to "Diff-based Detection".
     - **Update v33.1**:
-        - **図モード (Figure Mode) 追加**: ツールバーに「Aa」ボタンを追加しました。
-             - **OFF (通常)**: 盤面は「11」と表示（操作用）。
-             - **ON (図モード)**: 盤面は「A」と表示（配石跡地などの静止画出力用）。
         - **凡例の分離**: 盤面との間隔を広げ(80px)、背景マスクを追加することで、盤の罫線と凡例が重ならないように完全に分離しました。
         - **ハイブリッド凡例ロジック**: 
-            - **数字同士の重複**: 「10 [ 6 ]」表記。
-            - **配石との重複**: 「11 [ A ]」表記。盤面表記はモードによって「11」か「A」か切り替えられます。
+            - **数字同士の重複**: 「10 [ 6 ]」表記。盤面表記は常に **数字(10)** です（操作盤・出力画像共通）。
+            - **配石との重複**: 「11 [ A ]」表記。盤面表記は常に **数字(11)** です（「11はAの場所である」と凡例で示します）。
+        - **サイズ調整**: 凡例の石と数字を盤面の石と同じ定義(Radius 18.4, Font 26)に合わせて完全一致させました。
 - **ダブルクリック色変更**:
     - **手数モード**: 最後に打った石をダブルクリックすると白黒が反転します。
     - **配石(標準)モード**: 既にある石をダブルクリックすると、その石の色が反転し、手持ちの石の色もその色に変わります。
