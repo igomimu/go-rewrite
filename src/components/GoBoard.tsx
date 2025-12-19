@@ -451,9 +451,9 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                 const startX = MARGIN + (validMinX - 1) * CELL_SIZE - CELL_SIZE / 2 + (showCoordinates ? -25 : 0) + 10;
                 const startY = MARGIN + (validMaxY - 1) * CELL_SIZE + CELL_SIZE / 2 + (showCoordinates ? 25 : 0) + 80;
 
-                const ITEM_SPACING = 120; // Space between each "N [M]" group
-                const RADIUS = 14;
-                const FONT = 12;
+                const ITEM_SPACING = 130; // Space between each "N [M]" group
+                const RADIUS = 18; // Larger stones matching visual reference
+                const FONT = 16;
 
                 // Determine background color to mask any underlying grid lines (if viewing partial board)
                 const footerBg = isMonochrome ? 'white' : '#DCB35C';
