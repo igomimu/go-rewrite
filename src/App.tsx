@@ -1325,14 +1325,17 @@ function App() {
 
     const handleSaveSGF = async () => {
         const sgf = getSGFString();
+        const blob = new Blob([sgf], { type: 'application/x-go-sgf' });
+        const url = URL.createObjectURL(blob);
 
+        // 1) File System Access API (最優先)
         try {
             // @ts-ignore
             if (window.showSaveFilePicker) {
                 // @ts-ignore
                 const handle = await window.showSaveFilePicker({
-                    suggestedName: '',
-                    startIn: saveFileHandle,
+                    suggestedName: 'game.sgf',
+                    startIn: saveFileHandle ?? 'downloads',
                     types: [{
                         description: 'Smart Game Format',
                         accept: { 'application/x-go-sgf': ['.sgf'] },
@@ -1341,45 +1344,41 @@ function App() {
                 const writable = await handle.createWritable();
                 await writable.write(sgf);
                 await writable.close();
-                setSaveFileHandle(handle); // Store handle
+                setSaveFileHandle(handle); // Overwrite に使うハンドルを保持
+                URL.revokeObjectURL(url);
                 return;
             }
         } catch (err) {
-            console.warn('Save File Picker failed or canceled', err);
-            if ((err as Error).name === 'AbortError') return;
+            if ((err as Error).name === 'AbortError') {
+                URL.revokeObjectURL(url);
+                return; // ユーザーキャンセル
+            }
+            console.warn('Save File Picker failed, try downloads API', err);
         }
 
-        const blob = new Blob([sgf], { type: 'application/x-go-sgf' });
-        const url = URL.createObjectURL(blob);
-
-        // Chrome extension fallback: force Explorer save dialog
+        // 2) downloads API で強制的にエクスプローラを開く
         if (typeof chrome !== 'undefined' && chrome?.downloads?.download) {
             try {
                 await new Promise<void>((resolve, reject) => {
                     chrome.downloads.download(
                         { url, filename: 'game.sgf', saveAs: true, conflictAction: 'overwrite' },
-                        (downloadId: number) => {
-                            if (chrome.runtime?.lastError) {
-                                reject(chrome.runtime.lastError);
-                            } else {
-                                resolve();
-                            }
+                        () => {
+                            const lastErr = chrome.runtime?.lastError;
+                            if (lastErr) reject(lastErr);
+                            else resolve();
                         }
                     );
                 });
                 URL.revokeObjectURL(url);
                 return;
             } catch (err) {
-                console.warn('chrome.downloads download failed, falling back', err);
+                console.warn('chrome.downloads download failed', err);
             }
         }
 
-        // Final fallback
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `game.sgf`;
-        a.click();
+        // 3) それでも無理な場合は明示的に知らせる（自動DLは避ける）
         URL.revokeObjectURL(url);
+        alert('保存ダイアログを開けませんでした。拡張の「ダウンロード」権限を許可して再試行してください。');
     };
 
     const handleOverwriteSave = async () => {
