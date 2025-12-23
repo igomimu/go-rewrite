@@ -4,6 +4,9 @@ import { exportToPng } from './utils/exportUtils'
 import { checkCaptures } from './utils/gameLogic'
 import { parseSGF, generateSGF } from './utils/sgfUtils'
 
+// Chrome extension download API (type stub)
+declare const chrome: any;
+
 type PlacementMode = 'SIMPLE' | 'NUMBERED';
 
 export type ToolMode = 'STONE' | 'LABEL' | 'SYMBOL';
@@ -1346,9 +1349,32 @@ function App() {
             if ((err as Error).name === 'AbortError') return;
         }
 
-        // Fallback
         const blob = new Blob([sgf], { type: 'application/x-go-sgf' });
         const url = URL.createObjectURL(blob);
+
+        // Chrome extension fallback: force Explorer save dialog
+        if (typeof chrome !== 'undefined' && chrome?.downloads?.download) {
+            try {
+                await new Promise<void>((resolve, reject) => {
+                    chrome.downloads.download(
+                        { url, filename: 'game.sgf', saveAs: true, conflictAction: 'overwrite' },
+                        (downloadId: number) => {
+                            if (chrome.runtime?.lastError) {
+                                reject(chrome.runtime.lastError);
+                            } else {
+                                resolve();
+                            }
+                        }
+                    );
+                });
+                URL.revokeObjectURL(url);
+                return;
+            } catch (err) {
+                console.warn('chrome.downloads download failed, falling back', err);
+            }
+        }
+
+        // Final fallback
         const a = document.createElement('a');
         a.href = url;
         a.download = `game.sgf`;

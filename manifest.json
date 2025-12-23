@@ -12,6 +12,7 @@
     },
     "permissions": [
         "clipboardWrite",
-        "sidePanel"
+        "sidePanel",
+        "downloads"
     ]
 }
