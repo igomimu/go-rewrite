@@ -132,3 +132,5 @@ Thumbs.db
 *.zip
 backups/
 exports/
+main.js
+background.js
