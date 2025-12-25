@@ -2391,48 +2391,83 @@ function App() {
                 )}
 
                 {/* Mode B: Whole File */}
+                {/* Mode B: Whole File */}
                 {printSettings?.pagingType === 'WHOLE_FILE_FIGURE' && (
                     <div className="flex flex-col items-center w-full pt-12 print:pt-0">
-                        {generatePrintFigures(history, printSettings.movesPerFigure).map((fig, idx) => (
-                            <div key={idx} className="page-break flex flex-col items-center justify-center w-full h-screen">
-                                {/* Header */}
-                                <div className="w-full mb-2 text-center">
-                                    <h1 className="text-xl font-bold">{formatPrintString(printSettings.title, idx + 1)}</h1>
-                                    <h2 className="text-sm text-gray-600">{formatPrintString(printSettings.subTitle, idx + 1)}</h2>
-                                    <div className="text-right text-xs text-gray-500 mt-1 border-b border-gray-400">
-                                        {formatPrintString(printSettings.header, idx + 1)}
+                        {(() => {
+                            const figures = generatePrintFigures(history, printSettings.movesPerFigure);
+                            const perPage = printSettings.figuresPerPage || 4;
+                            const chunks = [];
+                            for (let i = 0; i < figures.length; i += perPage) {
+                                chunks.push(figures.slice(i, i + perPage));
+                            }
+
+                            // Grid Class Logic
+                            const getGridClass = (count: number) => {
+                                if (count === 1) return "flex justify-center items-center h-full"; // Centered single
+                                if (count === 2) return "grid grid-rows-2 gap-4 h-full items-center justify-items-center"; // 2 Vertical
+                                // For 4, 6 etc:
+                                return "grid grid-cols-2 gap-x-4 gap-y-2 h-full items-center justify-items-center align-content-center";
+                            };
+
+                            // Item Max Width Logic (to fit page)
+                            // A4 is roughly 210mm x 297mm.
+                            // 2 cols means max width ~45%.
+                            const getItemStyle = (count: number) => {
+                                if (count === 1) return { width: '80%', maxWidth: '800px' };
+                                if (count === 2) return { width: '60%', maxWidth: '600px' };
+                                return { width: '95%', maxWidth: '400px' }; // Tight fit for 4-up
+                            };
+
+                            return chunks.map((chunk, pageIdx) => (
+                                <div key={pageIdx} className="page-break w-full min-h-screen p-4 box-border flex flex-col justify-center">
+                                    {/* Page Header (Optional, maybe specific to page?) */}
+
+                                    <div className={`${getGridClass(perPage)} w-full flex-grow`}>
+                                        {chunk.map((fig, i) => (
+                                            <div key={i} className="flex flex-col items-center w-full" style={getItemStyle(perPage)}>
+                                                {/* Header */}
+                                                <div className="w-full mb-1 text-center">
+                                                    <h1 className="text-lg font-bold truncate">{formatPrintString(printSettings.title, (pageIdx * perPage) + i + 1)}</h1>
+                                                    {/* <h2 className="text-xs text-gray-600 truncate">{formatPrintString(printSettings.subTitle, (pageIdx * perPage) + i + 1)}</h2> */}
+                                                    <div className="text-right text-[10px] text-gray-500 border-b border-gray-400">
+                                                        {formatPrintString(printSettings.header, (pageIdx * perPage) + i + 1)}
+                                                    </div>
+                                                </div>
+
+                                                {/* Figure Info */}
+                                                <div className="w-full text-center font-bold text-xs mb-1">
+                                                    Figure {(pageIdx * perPage) + i + 1} ({fig.moveRangeStart}-{fig.moveRangeEnd})
+                                                </div>
+
+                                                {/* Board */}
+                                                <div className="w-full aspect-square relative">
+                                                    <GoBoard
+                                                        boardState={fig.board}
+                                                        boardSize={boardSize}
+                                                        showCoordinates={printSettings.showCoordinate}
+                                                        onCellClick={() => { }}
+                                                        onCellRightClick={() => { }}
+                                                        onBoardWheel={() => { }}
+                                                        onCellMouseEnter={() => { }}
+                                                        onCellMouseLeave={() => { }}
+                                                        onDragStart={() => { }}
+                                                        onDragMove={() => { }}
+                                                        selectionStart={null}
+                                                        isMonochrome={isMonochrome}
+                                                    />
+                                                </div>
+
+                                                {/* Footer */}
+                                                <div className="w-full text-center text-[10px] mt-1">
+                                                    {formatPrintString(printSettings.footer, (pageIdx * perPage) + i + 1)}
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
-
-                                {/* Figure Info */}
-                                <div className="w-full text-center font-bold mb-2">
-                                    Figure {idx + 1} ({fig.moveRangeStart}-{fig.moveRangeEnd})
-                                </div>
-
-                                {/* Board */}
-                                <div className="w-[80vw] h-[80vw] max-w-[800px] max-h-[800px]">
-                                    <GoBoard
-                                        boardState={fig.board}
-                                        boardSize={boardSize}
-                                        showCoordinates={printSettings.showCoordinate}
-                                        onCellClick={() => { }}
-                                        onCellRightClick={() => { }}
-                                        onBoardWheel={() => { }}
-                                        onCellMouseEnter={() => { }}
-                                        onCellMouseLeave={() => { }}
-                                        onDragStart={() => { }}
-                                        onDragMove={() => { }}
-                                        selectionStart={null}
-                                        isMonochrome={isMonochrome}
-                                    />
-                                </div>
-
-                                {/* Footer */}
-                                <div className="w-full text-center text-xs mt-auto pb-4">
-                                    {formatPrintString(printSettings.footer, idx + 1)}
-                                </div>
-                            </div>
-                        ))}
+                            ));
+                        })()}
                     </div>
                 )}
             </div>
