@@ -148,6 +148,18 @@ function App() {
 
 
 
+    // Update Markers without branching (Preserves History/Future)
+    const updateMarkers = (newMarkers: Marker[]) => {
+        const newHistory = [...history];
+        if (newHistory[currentMoveIndex]) {
+            newHistory[currentMoveIndex] = {
+                ...newHistory[currentMoveIndex],
+                markers: newMarkers
+            };
+            setHistory(newHistory);
+        }
+    };
+
     const handleInteraction = (x: number, y: number) => {
         if (dragStartRef.current) {
             const dx = Math.abs(dragStartRef.current.x - x);
@@ -181,8 +193,8 @@ function App() {
                     newMarkers.push({ x, y, type: 'SYMBOL', value: selectedSymbol });
                 }
             }
-            const currentBoard = history[currentMoveIndex].board;
-            commitState(currentBoard, nextNumber, activeColor, boardSize, newMarkers);
+            // Use updateMarkers instead of commitState to preserve future moves
+            updateMarkers(newMarkers);
             return;
         }
 
@@ -1871,7 +1883,12 @@ function App() {
                 </div>
                 <div className="flex gap-2 items-center">
                     <button
-                        onClick={() => setShowPrintModal(true)}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('Print button clicked', showPrintModal);
+                            setShowPrintModal(true);
+                        }}
                         className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center font-bold text-lg"
                         title="Print (Ctrl+P)"
                     >
