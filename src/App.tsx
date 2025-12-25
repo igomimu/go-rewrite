@@ -1098,8 +1098,14 @@ function App() {
         setShowPrintModal(false);
 
         // Wait for render to update with new settings
-        await new Promise(r => setTimeout(r, 100));
-        window.print();
+        await new Promise(r => setTimeout(r, 500));
+        try {
+            window.focus();
+            window.print();
+        } catch (e) {
+            console.error('Print failed:', e);
+            alert('印刷ダイアログの起動に失敗しました。');
+        }
     };
 
     const loadSGF = (content: string) => {
