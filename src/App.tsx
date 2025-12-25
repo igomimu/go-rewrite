@@ -1859,26 +1859,496 @@ function App() {
 
 
     return (
-        <div
-            className={`p-4 bg-gray-100 min-h-screen flex flex-col items-center font-sans text-sm pb-20 select-none relative ${isDragging ? 'bg-blue-50 outline outline-4 outline-blue-400 outline-offset-[-4px]' : ''} ${isPrintJob ? '!hidden' : ''}`}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-        >
-            {/* Overlay for "Drop File Here" visual feedback */}
-            {isDragging && (
-                <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-blue-100 bg-opacity-50">
-                    <div className="text-4xl font-bold text-blue-600 bg-white p-8 rounded-xl shadow-lg border-4 border-blue-400">
-                        Drop SGF File Here
+        <>
+            <div
+                className={`p-4 bg-gray-100 min-h-screen flex flex-col items-center font-sans text-sm pb-20 select-none relative ${isDragging ? 'bg-blue-50 outline outline-4 outline-blue-400 outline-offset-[-4px]' : ''} ${isPrintJob ? '!hidden' : ''}`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+            >
+                {/* Overlay for "Drop File Here" visual feedback */}
+                {isDragging && (
+                    <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-blue-100 bg-opacity-50">
+                        <div className="text-4xl font-bold text-blue-600 bg-white p-8 rounded-xl shadow-lg border-4 border-blue-400">
+                            Drop SGF File Here
+                        </div>
+                    </div>
+                )}
+
+                {/* Print Area Removed (Moved Outside) */}
+                <div className="flex justify-between w-full items-center mb-2">
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-xs text-gray-400 font-normal pl-1">v34.0</span>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                        <button
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                console.log('Print button clicked', showPrintModal);
+                                setShowPrintModal(true);
+                            }}
+                            className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center font-bold text-lg"
+                            title="Print (Ctrl+P)"
+                        >
+                            🖨️
+                        </button>
+                        {/* Hidden Input for Open SGF */}
+                        <input
+                            type="file"
+                            accept=".sgf"
+                            className="hidden"
+                            ref={fileInputRef}
+                            onChange={handleFileInputChange}
+                            style={{ display: 'none' }}
+                        />
+                        {/* Compact Action Buttons */}
+                        <button onClick={clearBoard} title="New / Clear (Alt+N)" className="w-8 h-8 rounded-full bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center font-bold transition-colors">
+                            🗑️
+                        </button>
+
+                        {/* Edit Group (Undo/Redo) - Moved to Left for separation */}
+                        <div className="flex gap-1 mx-1">
+                            <button onClick={deleteLastMove} disabled={currentMoveIndex === 0} title="Delete Last Move (Delete/Ctrl+Z)"
+                                className="w-8 h-8 rounded-full bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 flex items-center justify-center font-bold text-lg">
+                                ⌫
+                            </button>
+                            <button onClick={restoreMove} disabled={redoStack.length === 0} title="Restore Deleted Move (Ctrl+Y)"
+                                className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50 flex items-center justify-center font-bold text-lg">
+                                ↻
+                            </button>
+                        </div>
+
+                        {/* Overwrite Save */}
+                        <button onClick={handleOverwriteSave} title="Overwrite Save (Save)" className="w-8 h-8 rounded-full bg-green-100 text-green-700 hover:bg-green-200 flex items-center justify-center font-bold transition-colors">
+                            💾
+                        </button>
+
+                        {/* Save As */}
+                        <button onClick={handleSaveSGF} title="Save As... (Ctrl+S)" className="w-8 h-8 rounded-full bg-orange-50 text-orange-600 hover:bg-orange-100 flex items-center justify-center font-bold transition-colors">
+                            <img src="/icons/save_as_v2.png" alt="Save As" className="w-6 h-6 object-contain opacity-80" />
+                        </button>
+
+                        <button onClick={handleOpenSGF} title="Open SGF (Ctrl+O)" className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center justify-center font-bold transition-colors">
+                            📂
+                        </button>
+
+                        <button onClick={() => { if (selectionStart && selectionEnd) handleExportSelection(); else handleExport(); }}
+                            title="Copy Image (Ctrl+F)" className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center font-bold transition-colors">
+                            📷
+                        </button>
+
+                        {/* Save As */}
+
+                        <button
+                            onClick={() => setShowCapturedInExport(!showCapturedInExport)}
+                            title={`Show Captured Stones in Export: ${showCapturedInExport ? 'ON' : 'OFF'}`}
+                            className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors ${showCapturedInExport ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                        >
+                            👻
+                        </button>
+
+                        <button
+                            onClick={() => setShowNumbers(!showNumbers)}
+                            title={`Toggle Numbers: ${showNumbers ? 'ON' : 'OFF'}`}
+                            className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors ${showNumbers ? 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                        >
+                            ⑧
+                        </button>
+
+
+
+
+
+                        <div className="w-px h-6 bg-gray-300 mx-1"></div>
+
+
+                        {/* Pass Button */}
+                        <button onClick={handlePass} disabled={mode !== 'NUMBERED'} title="Pass"
+                            className="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 font-bold flex items-center justify-center h-8 ml-1 text-lg">
+                            ✋
+                        </button>
+
+                        <div className="w-px h-6 bg-gray-300 mx-1"></div>
+
+                        {/* Open in New Tab */}
+                        <button
+                            onClick={() => window.open('index.html', '_blank')}
+                            className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center font-bold text-xs"
+                            title="Open in New Tab (Maximize)"
+                        >
+                            ↗
+                        </button>
+
+                        {/* Help Button */}
+                        <button
+                            onClick={() => setShowHelp(true)}
+                            className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center font-bold text-xs"
+                            title="Help"
+                        >
+                            ?
+                        </button>
                     </div>
                 </div>
-            )}
 
-            {/* Print Area (Hidden on Screen) */}
-            <div className="hidden print:block w-full font-serif text-sm">
-                {/* Mode A: Current Board (Similar to what we had, but using settings) */}
+                {/* Help Modal */}
+                {showHelp && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setShowHelp(false)}>
+                        <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full relative" onClick={e => e.stopPropagation()}>
+                            <button
+                                className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 font-bold text-lg"
+                                onClick={() => setShowHelp(false)}
+                            >
+                                ×
+                            </button>
+                            <h2 className="text-lg font-bold mb-4 text-gray-800 border-b pb-2">Shortcuts & Help</h2>
+                            <div className="space-y-3 text-sm text-gray-700">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-6 text-center text-xl">🖱️</div>
+                                    <div>
+                                        <div className="font-bold">Click / Right Click</div>
+                                        <div className="text-xs text-gray-500">Place Stone / Delete Stone</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-6 text-center text-xl">🖱️</div>
+                                    <div>
+                                        <div className="font-bold">Drag</div>
+                                        <div className="text-xs text-gray-500">Select Area (Crop) / Move Stone</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-6 text-center text-xl">⚙️</div>
+                                    <div>
+                                        <div className="font-bold">Wheel</div>
+                                        <div className="text-xs text-gray-500">Undo / Redo</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-6 text-center text-xs font-mono border rounded bg-gray-100">Ctrl+F</div>
+                                    <div>
+                                        <div className="font-bold">Copy Image</div>
+                                        <div className="text-xs text-gray-500">Save to Clipboard (High Res)</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-6 text-center text-xs font-mono border rounded bg-gray-100">Ctrl+V</div>
+                                    <div>
+                                        <div className="font-bold">Paste SGF</div>
+                                        <div className="text-xs text-gray-500">Load SGF from Clipboard</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-6 text-center text-xs font-mono border rounded bg-gray-100">Esc</div>
+                                    <div>
+                                        <div className="font-bold">Cancel</div>
+                                        <div className="text-xs text-gray-500">Clear Selection / Close Help</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="mt-6 text-center text-xs text-gray-400">
+                                GORewrite v22
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Print Settings Modal */}
+                <PrintSettingsModal
+                    isOpen={showPrintModal}
+                    onClose={() => setShowPrintModal(false)}
+                    onPrint={handlePrintRequest}
+                />
+
+                {/* Actual Print Content Removed (Moved Outside) */}
+
+                {/* Game Metadata Inputs (Replaced with Modal Trigger) */}
+                <div className="w-full mb-2 flex justify-start print:hidden">
+                    <button
+                        onClick={() => setShowGameInfoModal(true)}
+                        className="flex items-center gap-1 text-sm bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded px-3 py-1 text-gray-700"
+                    >
+                        <span>ℹ️</span>
+                        <span>Game Info...</span>
+                    </button>
+                </div>
+
+                {showGameInfoModal && (
+                    <GameInfoModal
+                        onClose={() => setShowGameInfoModal(false)}
+                        blackName={blackName} setBlackName={setBlackName}
+                        blackRank={blackRank} setBlackRank={setBlackRank}
+                        blackTeam={blackTeam} setBlackTeam={setBlackTeam}
+                        whiteName={whiteName} setWhiteName={setWhiteName}
+                        whiteRank={whiteRank} setWhiteRank={setWhiteRank}
+                        whiteTeam={whiteTeam} setWhiteTeam={setWhiteTeam}
+                        komi={komi} setKomi={setKomi}
+                        handicap={handicap} setHandicap={setHandicap}
+                        result={gameResult} setResult={setGameResult}
+                        gameName={gameName} setGameName={setGameName}
+                        event={gameEvent} setEvent={setGameEvent}
+                        date={gameDate} setDate={setGameDate}
+                        place={gamePlace} setPlace={setGamePlace}
+                        round={gameRound} setRound={setGameRound}
+                        time={gameTime} setTime={setGameTime}
+                        user={gameUser} setUser={setGameUser}
+                        source={gameSource} setSource={setGameSource}
+                        gameComment={gameComment} setGameComment={setGameComment}
+                        copyright={gameCopyright} setCopyright={setGameCopyright}
+                        annotation={gameAnnotation} setAnnotation={setGameAnnotation}
+                    />
+                )}
+
+                {/* Visual Style Toolbar */}
+                <div className="w-full flex justify-end mb-2 gap-2">
+                    <button
+                        onClick={() => setIsMonochrome(!isMonochrome)}
+                        className={`text-xs px-2 py-1 rounded border shadow-sm transition-colors ${isMonochrome
+                            ? 'bg-gray-800 text-white border-gray-800'
+                            : 'bg-yellow-100 text-yellow-800 border-yellow-300 hover:bg-yellow-200'
+                            }`}
+                        title="Toggle Monochrome (Printer Friendly)"
+                    >
+                        {isMonochrome ? '白黒' : 'カラー'}
+                    </button>
+                </div>
+
+                {/* Board Container */}
+                <div
+                    className="bg-white shadow-lg p-2 rounded mb-4 w-full"
+                    onDoubleClick={handleDoubleClick}
+                >
+                    <GoBoard
+                        ref={svgRef}
+                        boardState={displayBoard}
+                        boardSize={boardSize}
+                        viewRange={effectiveViewRange}
+                        showCoordinates={showCoordinates}
+                        showNumbers={showNumbers}
+                        isMonochrome={isMonochrome}
+                        onCellClick={handleInteraction}
+                        onCellRightClick={handleRightClick}
+                        onBoardWheel={handleWheel}
+                        onCellMouseEnter={(x, y) => { hoveredCellRef.current = { x, y }; }}
+                        onCellMouseLeave={() => { hoveredCellRef.current = null; }}
+                        selectionStart={selectionStart}
+                        selectionEnd={selectionEnd}
+                        onDragStart={handleDragStart}
+                        onDragMove={handleDragMove}
+                        onDragEnd={handleDragEnd}
+                        hiddenMoves={isFigureMode ? hiddenMoves : []}
+                        prioritizeLabel={isFigureMode}
+                        specialLabels={specialLabels}
+                        nextNumber={nextNumber}
+                        activeColor={activeColor}
+                        markers={history[currentMoveIndex]?.markers || []}
+                    />
+
+                    {/* Float Controls: Zoom / Reset */}
+                    <div className="absolute top-2 right-2 flex gap-2">
+                        {/* Zoom / Copy Buttons (only if selected) */}
+                        {(selectionStart && selectionEnd) && (
+                            <>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleExportSelection(); }}
+                                    className="bg-green-600 text-white text-xs font-bold px-3 py-1 rounded shadow hover:bg-green-700 transition-all flex items-center gap-1"
+                                    title="Copy Selection (Scissors)"
+                                >
+                                    <span>✂️</span> Copy
+                                </button>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handleZoomToSelection(); }}
+                                    className="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded shadow hover:bg-blue-700 transition-all flex items-center gap-1"
+                                    title="Crop to Selection"
+                                >
+                                    <span>🔍</span> Zoom
+                                </button>
+                            </>
+                        )}
+
+                        {/* Reset Zoom Button (only if cropped) */}
+                        {isCropped && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setViewRange(null); }}
+                                className="bg-gray-700 text-white text-xs font-bold px-3 py-1 rounded shadow hover:bg-gray-800 transition-all flex items-center gap-1 opacity-80 hover:opacity-100"
+                                title="Reset View (Esc)"
+                            >
+                                <span>↺</span> Reset
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {/* Controls */}
+                <div className="bg-white p-4 rounded shadow w-full space-y-4">
+
+                    {/* Mode Switch (Compact Icons) */}
+                    {/* Mode Switch (3 Icons: Black, White, Numbered) */}
+                    <div className="flex justify-center space-x-4 border-b pb-2">
+                        {/* Black Stone (Simple) */}
+                        <button
+                            title="Place Black Stone (Simple Mode)"
+                            className={`p-2 rounded-full transition-all ${mode === 'SIMPLE' && activeColor === 'BLACK' ? 'bg-blue-100 ring-2 ring-blue-500 scale-110' : 'hover:bg-gray-100 opacity-60 hover:opacity-100'}`}
+                            onClick={() => {
+                                setMode('SIMPLE');
+                                setToolMode('STONE');
+                                const newHistory = [...history];
+                                newHistory[currentMoveIndex] = { ...newHistory[currentMoveIndex], activeColor: 'BLACK' };
+                                setHistory(newHistory);
+                            }}
+                        >
+                            <svg width="24" height="24" viewBox="0 0 24 24" className="text-black">
+                                <circle cx="12" cy="12" r="10" fill="currentColor" />
+                            </svg>
+                        </button>
+
+                        {/* White Stone (Simple) */}
+                        <button
+                            title="Place White Stone (Simple Mode)"
+                            className={`p-2 rounded-full transition-all ${mode === 'SIMPLE' && activeColor === 'WHITE' ? 'bg-blue-100 ring-2 ring-blue-500 scale-110' : 'hover:bg-gray-100 opacity-60 hover:opacity-100'}`}
+                            onClick={() => {
+                                setMode('SIMPLE');
+                                setToolMode('STONE');
+                                const newHistory = [...history];
+                                newHistory[currentMoveIndex] = { ...newHistory[currentMoveIndex], activeColor: 'WHITE' };
+                                setHistory(newHistory);
+                            }}
+                        >
+                            <svg width="24" height="24" viewBox="0 0 24 24" className="text-gray-600">
+                                {/* Use stroke or gray fill for white stone appearance on white bg? */
+                              /* The previous icon used 'text-gray-600' which is dark gray. 
+                                 Real white stone needs border. */ }
+                                <circle cx="12" cy="12" r="9.5" fill="white" stroke="currentColor" strokeWidth="1" />
+                            </svg>
+                        </button>
+
+                        {/* Numbered Stone */}
+                        <button
+                            title="Numbered Mode"
+                            className={`p-2 rounded-full transition-all ${mode === 'NUMBERED' ? 'bg-blue-100 ring-2 ring-blue-500 scale-110' : 'hover:bg-gray-100 opacity-60 hover:opacity-100'}`}
+                            onClick={() => {
+                                setMode('NUMBERED');
+                                setToolMode('STONE');
+                                // Force Black
+                                const newHistory = [...history];
+                                newHistory[currentMoveIndex] = { ...newHistory[currentMoveIndex], activeColor: 'BLACK' };
+                                setHistory(newHistory);
+                            }}
+                        >
+                            <svg width="24" height="24" viewBox="0 0 24 24" className="text-black">
+                                {/* Dynamic color for icon? activeColor? 
+                                User asked for "Number Stone Icon". Usually implies a generic numbered stone.
+                                Let's use Black 1 for icon. */}
+                                <circle cx="12" cy="12" r="10" fill="currentColor" />
+                                <text x="12" y="17" textAnchor="middle" fill="white" fontSize="14" fontWeight="bold" fontFamily="sans-serif">1</text>
+                            </svg>
+                        </button>
+                        {/* Label Mode */}
+                        <button
+                            title="Label Mode (A, B, C...)"
+                            onClick={() => setToolMode('LABEL')}
+                            className={`ml-4 w-10 h-10 rounded font-bold border flex items-center justify-center transition-all ${toolMode === 'LABEL' ? 'bg-blue-100 border-blue-500 text-blue-700' : 'bg-white border-gray-300 hover:bg-gray-100'}`}
+                        >
+                            A
+                        </button>
+
+                        {/* Symbol Mode Dropdown */}
+                        <select
+                            title="Symbol Mode"
+                            value={toolMode === 'SYMBOL' ? selectedSymbol : ''}
+                            onChange={(e) => {
+                                const val = e.target.value as SymbolType;
+                                setSelectedSymbol(val);
+                                setToolMode('SYMBOL');
+                            }}
+                            className={`ml-2 h-10 rounded border px-1 text-sm bg-white cursor-pointer transition-all ${toolMode === 'SYMBOL' ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-300'}`}
+                        >
+                            <option value="" disabled hidden>記号</option>
+                            <option value="TRI">△</option>
+                            <option value="CIR">◯</option>
+                            <option value="SQR">□</option>
+                            <option value="X">✕</option>
+                        </select>
+                    </div>
+                </div>
+
+
+
+                {/* Tools: Next, Coords, Size */}
+                <div className="flex flex-col gap-2 bg-gray-50 p-2 rounded">
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setShowCoordinates(!showCoordinates)}
+                            className={`text-xs px-2 py-1 rounded border ${showCoordinates ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300'} whitespace-nowrap`}
+                        >
+                            Coords: {showCoordinates ? 'ON' : 'OFF'}
+                        </button>
+
+                        {/* Navigation Group (Moved from Top) */}
+                        <div className="flex bg-gray-200 rounded p-1 gap-1">
+                            <button onClick={stepFirst} disabled={currentMoveIndex === 0} title="First" className="px-2 font-bold hover:bg-white rounded disabled:opacity-30">|&lt;</button>
+                            <button onClick={stepBack} disabled={currentMoveIndex === 0} title="Back (Backspace/Left)" className="px-2 font-bold hover:bg-white rounded disabled:opacity-30">&lt;</button>
+                            <div className="text-xs flex items-center min-w-[30px] justify-center bg-white rounded px-2">{mode === 'NUMBERED' ? `${currentMoveIndex}` : '-'}</div>
+                            <button onClick={stepForward} disabled={currentMoveIndex === history.length - 1} title="Next (Right)" className="px-2 font-bold hover:bg-white rounded disabled:opacity-30">&gt;</button>
+                            <button onClick={stepLast} disabled={currentMoveIndex === history.length - 1} title="Last" className="px-2 font-bold hover:bg-white rounded disabled:opacity-30">&gt;|</button>
+                        </div>
+                    </div>
+
+
+                    {/* Size Switcher */}
+                    <div className="flex items-center gap-2 pt-1 border-t border-gray-200">
+                        <span className="text-xs text-gray-500">Size:</span>
+                        {[19, 13, 9].map(s => (
+                            <button
+                                key={s}
+                                onClick={() => setBoardSize(s)}
+                                className={`text - xs px - 2 py - 0.5 rounded border ${boardSize === s ? 'bg-gray-700 text-white' : 'text-gray-600 border-gray-300 hover:bg-gray-200'} `}
+                            >
+                                {s}路
+                            </button>
+                        ))}
+                    </div>
+
+                    {mode === 'NUMBERED' && (
+                        <div className="flex items-center gap-2 pt-1 border-t border-gray-200">
+                            <label className="text-xs">Start #:</label>
+                            <input
+                                type="number"
+                                className="w-12 border rounded px-1 text-center"
+                                value={nextNumber}
+                                onChange={(e) => setNextNumberDirectly(Math.max(1, parseInt(e.target.value) || 1))}
+                            />
+                        </div>
+                    )}
+                </div>
+
+                {/* SGF & Export */}
+                {/* Actions (Moved to Header) */}
+                {/* Actions (Moved to Header) */}
+                <div className="text-xs text-center text-gray-400 mt-2 space-y-1 pt-4 border-t border-gray-100">
+                    <div>L: Place / R: Delete / Wheel: Nav</div>
+                    <div>DblClick: Swap Color / Switch Tool</div>
+                    <div>**Ctrl+V: Paste SGF**</div>
+                </div>
+            </div>
+
+            {/* Actual Print Content (Moved Outside Main Div) */}
+            <div className={isPrintJob ? "block w-full font-serif text-sm bg-white" : "hidden print:block w-full font-serif text-sm bg-white"}>
+                {isPrintJob && (
+                    <div className="fixed top-0 left-0 w-full bg-blue-100 p-2 text-center print:hidden z-50 flex justify-center gap-4 items-center shadow-md">
+                        <span className="font-bold text-blue-900">Print Preview</span>
+                        <button onClick={() => window.print()} className="px-4 py-1.5 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 shadow transition-colors text-sm flex items-center gap-2">
+                            <span>🖨️</span> Print Now
+                        </button>
+                        <button onClick={() => { setIsPrintJob(false); setShowPrintModal(true); }} className="px-4 py-1.5 bg-gray-500 text-white rounded font-bold hover:bg-gray-600 shadow transition-colors text-sm">
+                            Close
+                        </button>
+                    </div>
+                )}
+
+                {/* Mode A: Current Board */}
                 {(!printSettings || printSettings.pagingType === 'CURRENT') && (
-                    <div className="flex flex-col items-center w-full h-screen">
+                    <div className="flex flex-col items-center w-full h-screen pt-12 print:pt-0">
                         {/* Header Area */}
                         <div className="w-full mb-4 text-center">
                             <h1 className="text-2xl font-bold mb-1">{formatPrintString(printSettings?.title || '%GN%')}</h1>
@@ -1888,21 +2358,14 @@ function App() {
                             </div>
                         </div>
 
-                        {/* Board acts as "Current View" */}
-                        <div className="w-[80vw] h-[80vw] max-w-[800px] max-h-[800px] border-2 border-black">
-                            {/* We just duplicate the board rendering here for simplicity or rely on a shared component. 
-                                Since GoBoard is complex with props, maybe we can re-use the Current Board state. 
-                            */}
-                            {/* Wait, the previous code just hid the controls. 
-                                Now we are wrapping the print view. 
-                                Let's just render the GoBoard with "View Mode" settings.
-                            */}
+                        {/* Board */}
+                        <div className="w-[80vw] h-[80vw] max-w-[800px] max-h-[800px] flex justify-center border-0 border-transparent mb-4">
                             <GoBoard
                                 boardState={board}
                                 boardSize={boardSize}
                                 showCoordinates={printSettings?.showCoordinate ?? showCoordinates}
                                 showNumbers={printSettings?.showMoveNumber ?? showNumbers}
-                                markers={history[currentMoveIndex].markers}
+                                markers={history[currentMoveIndex]?.markers || []}
                                 onCellClick={() => { }}
                                 onCellRightClick={() => { }}
                                 onBoardWheel={() => { }}
@@ -1921,226 +2384,10 @@ function App() {
                         </div>
                     </div>
                 )}
-            </div>
-            <div className="flex justify-between w-full items-center mb-2">
-                <div className="flex items-baseline gap-2">
-                    <span className="text-xs text-gray-400 font-normal pl-1">v34.0</span>
-                </div>
-                <div className="flex gap-2 items-center">
-                    <button
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            console.log('Print button clicked', showPrintModal);
-                            setShowPrintModal(true);
-                        }}
-                        className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center font-bold text-lg"
-                        title="Print (Ctrl+P)"
-                    >
-                        🖨️
-                    </button>
-                    {/* Hidden Input for Open SGF */}
-                    <input
-                        type="file"
-                        accept=".sgf"
-                        className="hidden"
-                        ref={fileInputRef}
-                        onChange={handleFileInputChange}
-                        style={{ display: 'none' }}
-                    />
-                    {/* Compact Action Buttons */}
-                    <button onClick={clearBoard} title="New / Clear (Alt+N)" className="w-8 h-8 rounded-full bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center font-bold transition-colors">
-                        🗑️
-                    </button>
-
-                    {/* Edit Group (Undo/Redo) - Moved to Left for separation */}
-                    <div className="flex gap-1 mx-1">
-                        <button onClick={deleteLastMove} disabled={currentMoveIndex === 0} title="Delete Last Move (Delete/Ctrl+Z)"
-                            className="w-8 h-8 rounded-full bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 flex items-center justify-center font-bold text-lg">
-                            ⌫
-                        </button>
-                        <button onClick={restoreMove} disabled={redoStack.length === 0} title="Restore Deleted Move (Ctrl+Y)"
-                            className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50 flex items-center justify-center font-bold text-lg">
-                            ↻
-                        </button>
-                    </div>
-
-                    {/* Overwrite Save */}
-                    <button onClick={handleOverwriteSave} title="Overwrite Save (Save)" className="w-8 h-8 rounded-full bg-green-100 text-green-700 hover:bg-green-200 flex items-center justify-center font-bold transition-colors">
-                        💾
-                    </button>
-
-                    {/* Save As */}
-                    <button onClick={handleSaveSGF} title="Save As... (Ctrl+S)" className="w-8 h-8 rounded-full bg-orange-50 text-orange-600 hover:bg-orange-100 flex items-center justify-center font-bold transition-colors">
-                        <img src="/icons/save_as_v2.png" alt="Save As" className="w-6 h-6 object-contain opacity-80" />
-                    </button>
-
-                    <button onClick={handleOpenSGF} title="Open SGF (Ctrl+O)" className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center justify-center font-bold transition-colors">
-                        📂
-                    </button>
-
-                    <button onClick={() => { if (selectionStart && selectionEnd) handleExportSelection(); else handleExport(); }}
-                        title="Copy Image (Ctrl+F)" className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center font-bold transition-colors">
-                        📷
-                    </button>
-
-                    {/* Save As */}
-
-                    <button
-                        onClick={() => setShowCapturedInExport(!showCapturedInExport)}
-                        title={`Show Captured Stones in Export: ${showCapturedInExport ? 'ON' : 'OFF'}`}
-                        className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors ${showCapturedInExport ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
-                    >
-                        👻
-                    </button>
-
-                    <button
-                        onClick={() => setShowNumbers(!showNumbers)}
-                        title={`Toggle Numbers: ${showNumbers ? 'ON' : 'OFF'}`}
-                        className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors ${showNumbers ? 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
-                    >
-                        ⑧
-                    </button>
-
-
-
-
-
-                    <div className="w-px h-6 bg-gray-300 mx-1"></div>
-
-
-                    {/* Pass Button */}
-                    <button onClick={handlePass} disabled={mode !== 'NUMBERED'} title="Pass"
-                        className="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 font-bold flex items-center justify-center h-8 ml-1 text-lg">
-                        ✋
-                    </button>
-
-                    <div className="w-px h-6 bg-gray-300 mx-1"></div>
-
-                    {/* Open in New Tab */}
-                    <button
-                        onClick={() => window.open('index.html', '_blank')}
-                        className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center font-bold text-xs"
-                        title="Open in New Tab (Maximize)"
-                    >
-                        ↗
-                    </button>
-
-                    {/* Help Button */}
-                    <button
-                        onClick={() => setShowHelp(true)}
-                        className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center font-bold text-xs"
-                        title="Help"
-                    >
-                        ?
-                    </button>
-                </div>
-            </div>
-
-            {/* Help Modal */}
-            {showHelp && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={() => setShowHelp(false)}>
-                    <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full relative" onClick={e => e.stopPropagation()}>
-                        <button
-                            className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 font-bold text-lg"
-                            onClick={() => setShowHelp(false)}
-                        >
-                            ×
-                        </button>
-                        <h2 className="text-lg font-bold mb-4 text-gray-800 border-b pb-2">Shortcuts & Help</h2>
-                        <div className="space-y-3 text-sm text-gray-700">
-                            <div className="flex items-center gap-3">
-                                <div className="w-6 text-center text-xl">🖱️</div>
-                                <div>
-                                    <div className="font-bold">Click / Right Click</div>
-                                    <div className="text-xs text-gray-500">Place Stone / Delete Stone</div>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <div className="w-6 text-center text-xl">🖱️</div>
-                                <div>
-                                    <div className="font-bold">Drag</div>
-                                    <div className="text-xs text-gray-500">Select Area (Crop) / Move Stone</div>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <div className="w-6 text-center text-xl">⚙️</div>
-                                <div>
-                                    <div className="font-bold">Wheel</div>
-                                    <div className="text-xs text-gray-500">Undo / Redo</div>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <div className="w-6 text-center text-xs font-mono border rounded bg-gray-100">Ctrl+F</div>
-                                <div>
-                                    <div className="font-bold">Copy Image</div>
-                                    <div className="text-xs text-gray-500">Save to Clipboard (High Res)</div>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <div className="w-6 text-center text-xs font-mono border rounded bg-gray-100">Ctrl+V</div>
-                                <div>
-                                    <div className="font-bold">Paste SGF</div>
-                                    <div className="text-xs text-gray-500">Load SGF from Clipboard</div>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <div className="w-6 text-center text-xs font-mono border rounded bg-gray-100">Esc</div>
-                                <div>
-                                    <div className="font-bold">Cancel</div>
-                                    <div className="text-xs text-gray-500">Clear Selection / Close Help</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="mt-6 text-center text-xs text-gray-400">
-                            GORewrite v22
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Print Settings Modal */}
-            <PrintSettingsModal
-                isOpen={showPrintModal}
-                onClose={() => setShowPrintModal(false)}
-                onPrint={handlePrintRequest}
-            />
-
-            {/* Actual Print Content (Replaces previous simple print view) */}
-            <div className={isPrintJob ? "block w-full font-serif text-sm" : "hidden print:block w-full font-serif text-sm"}>
-                {isPrintJob && (
-                    <div className="fixed top-0 left-0 w-full bg-blue-100 p-2 text-center print:hidden z-50 flex justify-center gap-4 items-center shadow-md">
-                        <span className="font-bold text-blue-900">Print Preview</span>
-                        <button onClick={() => window.print()} className="px-4 py-1.5 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 shadow transition-colors text-sm flex items-center gap-2">
-                            <span>🖨️</span> Print Now
-                        </button>
-                    </div>
-                )}
-                {/* Mode A: Current Board (Similar to what we had, but using settings) */}
-                {(!printSettings || printSettings.pagingType === 'CURRENT') && (
-                    <div className="flex flex-col items-center w-full h-screen">
-                        {/* Header Area */}
-                        <div className="w-full mb-4 text-center">
-                            <h1 className="text-2xl font-bold mb-1">{formatPrintString(printSettings?.title || '%GN%')}</h1>
-                            <h2 className="text-lg text-gray-600">{formatPrintString(printSettings?.subTitle || '%DT%')}</h2>
-                            <div className="text-right text-xs text-gray-500 mt-2 border-b border-gray-400">
-                                {formatPrintString(printSettings?.header || '')}
-                            </div>
-                        </div>
-
-                        {/* Board acts as "Current View", so we just let the main board render. 
-                            BUT, main board is hidden by default styles? 
-                            We need to ensure the main board is VISIBLE in print if 'CURRENT'. 
-                            Actually, my previous CSS hid everything *except* the board. 
-                            Now I want to control it more. 
-                            Let's use a specific container for the print view. 
-                        */}
-                    </div>
-                )}
 
                 {/* Mode B: Whole File */}
                 {printSettings?.pagingType === 'WHOLE_FILE_FIGURE' && (
-                    <div className="flex flex-col items-center w-full">
+                    <div className="flex flex-col items-center w-full pt-12 print:pt-0">
                         {generatePrintFigures(history, printSettings.movesPerFigure).map((fig, idx) => (
                             <div key={idx} className="page-break flex flex-col items-center justify-center w-full h-screen">
                                 {/* Header */}
@@ -2163,7 +2410,6 @@ function App() {
                                         boardState={fig.board}
                                         boardSize={boardSize}
                                         showCoordinates={printSettings.showCoordinate}
-                                        /* ruler is omitted as it behaves like coordinates in some contexts but here we rely on showCoordinates */
                                         onCellClick={() => { }}
                                         onCellRightClick={() => { }}
                                         onBoardWheel={() => { }}
@@ -2171,9 +2417,8 @@ function App() {
                                         onCellMouseLeave={() => { }}
                                         onDragStart={() => { }}
                                         onDragMove={() => { }}
-
-                                        /* Required props */
                                         selectionStart={null}
+                                        isMonochrome={isMonochrome}
                                     />
                                 </div>
 
@@ -2186,276 +2431,7 @@ function App() {
                     </div>
                 )}
             </div>
-
-            {/* Game Metadata Inputs (Replaced with Modal Trigger) */}
-            <div className="w-full mb-2 flex justify-start print:hidden">
-                <button
-                    onClick={() => setShowGameInfoModal(true)}
-                    className="flex items-center gap-1 text-sm bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded px-3 py-1 text-gray-700"
-                >
-                    <span>ℹ️</span>
-                    <span>Game Info...</span>
-                </button>
-            </div>
-
-            {showGameInfoModal && (
-                <GameInfoModal
-                    onClose={() => setShowGameInfoModal(false)}
-                    blackName={blackName} setBlackName={setBlackName}
-                    blackRank={blackRank} setBlackRank={setBlackRank}
-                    blackTeam={blackTeam} setBlackTeam={setBlackTeam}
-                    whiteName={whiteName} setWhiteName={setWhiteName}
-                    whiteRank={whiteRank} setWhiteRank={setWhiteRank}
-                    whiteTeam={whiteTeam} setWhiteTeam={setWhiteTeam}
-                    komi={komi} setKomi={setKomi}
-                    handicap={handicap} setHandicap={setHandicap}
-                    result={gameResult} setResult={setGameResult}
-                    gameName={gameName} setGameName={setGameName}
-                    event={gameEvent} setEvent={setGameEvent}
-                    date={gameDate} setDate={setGameDate}
-                    place={gamePlace} setPlace={setGamePlace}
-                    round={gameRound} setRound={setGameRound}
-                    time={gameTime} setTime={setGameTime}
-                    user={gameUser} setUser={setGameUser}
-                    source={gameSource} setSource={setGameSource}
-                    gameComment={gameComment} setGameComment={setGameComment}
-                    copyright={gameCopyright} setCopyright={setGameCopyright}
-                    annotation={gameAnnotation} setAnnotation={setGameAnnotation}
-                />
-            )}
-
-            {/* Visual Style Toolbar */}
-            <div className="w-full flex justify-end mb-2 gap-2">
-                <button
-                    onClick={() => setIsMonochrome(!isMonochrome)}
-                    className={`text-xs px-2 py-1 rounded border shadow-sm transition-colors ${isMonochrome
-                        ? 'bg-gray-800 text-white border-gray-800'
-                        : 'bg-yellow-100 text-yellow-800 border-yellow-300 hover:bg-yellow-200'
-                        }`}
-                    title="Toggle Monochrome (Printer Friendly)"
-                >
-                    {isMonochrome ? '白黒' : 'カラー'}
-                </button>
-            </div>
-
-            {/* Board Container */}
-            <div
-                className="bg-white shadow-lg p-2 rounded mb-4 w-full"
-                onDoubleClick={handleDoubleClick}
-            >
-                <GoBoard
-                    ref={svgRef}
-                    boardState={displayBoard}
-                    boardSize={boardSize}
-                    viewRange={effectiveViewRange}
-                    showCoordinates={showCoordinates}
-                    showNumbers={showNumbers}
-                    isMonochrome={isMonochrome}
-                    onCellClick={handleInteraction}
-                    onCellRightClick={handleRightClick}
-                    onBoardWheel={handleWheel}
-                    onCellMouseEnter={(x, y) => { hoveredCellRef.current = { x, y }; }}
-                    onCellMouseLeave={() => { hoveredCellRef.current = null; }}
-                    selectionStart={selectionStart}
-                    selectionEnd={selectionEnd}
-                    onDragStart={handleDragStart}
-                    onDragMove={handleDragMove}
-                    onDragEnd={handleDragEnd}
-                    hiddenMoves={isFigureMode ? hiddenMoves : []}
-                    prioritizeLabel={isFigureMode}
-                    specialLabels={specialLabels}
-                    nextNumber={nextNumber}
-                    activeColor={activeColor}
-                    markers={history[currentMoveIndex]?.markers || []}
-                />
-
-                {/* Float Controls: Zoom / Reset */}
-                <div className="absolute top-2 right-2 flex gap-2">
-                    {/* Zoom / Copy Buttons (only if selected) */}
-                    {(selectionStart && selectionEnd) && (
-                        <>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); handleExportSelection(); }}
-                                className="bg-green-600 text-white text-xs font-bold px-3 py-1 rounded shadow hover:bg-green-700 transition-all flex items-center gap-1"
-                                title="Copy Selection (Scissors)"
-                            >
-                                <span>✂️</span> Copy
-                            </button>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); handleZoomToSelection(); }}
-                                className="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded shadow hover:bg-blue-700 transition-all flex items-center gap-1"
-                                title="Crop to Selection"
-                            >
-                                <span>🔍</span> Zoom
-                            </button>
-                        </>
-                    )}
-
-                    {/* Reset Zoom Button (only if cropped) */}
-                    {isCropped && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); setViewRange(null); }}
-                            className="bg-gray-700 text-white text-xs font-bold px-3 py-1 rounded shadow hover:bg-gray-800 transition-all flex items-center gap-1 opacity-80 hover:opacity-100"
-                            title="Reset View (Esc)"
-                        >
-                            <span>↺</span> Reset
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            {/* Controls */}
-            <div className="bg-white p-4 rounded shadow w-full space-y-4">
-
-                {/* Mode Switch (Compact Icons) */}
-                {/* Mode Switch (3 Icons: Black, White, Numbered) */}
-                <div className="flex justify-center space-x-4 border-b pb-2">
-                    {/* Black Stone (Simple) */}
-                    <button
-                        title="Place Black Stone (Simple Mode)"
-                        className={`p-2 rounded-full transition-all ${mode === 'SIMPLE' && activeColor === 'BLACK' ? 'bg-blue-100 ring-2 ring-blue-500 scale-110' : 'hover:bg-gray-100 opacity-60 hover:opacity-100'}`}
-                        onClick={() => {
-                            setMode('SIMPLE');
-                            setToolMode('STONE');
-                            const newHistory = [...history];
-                            newHistory[currentMoveIndex] = { ...newHistory[currentMoveIndex], activeColor: 'BLACK' };
-                            setHistory(newHistory);
-                        }}
-                    >
-                        <svg width="24" height="24" viewBox="0 0 24 24" className="text-black">
-                            <circle cx="12" cy="12" r="10" fill="currentColor" />
-                        </svg>
-                    </button>
-
-                    {/* White Stone (Simple) */}
-                    <button
-                        title="Place White Stone (Simple Mode)"
-                        className={`p-2 rounded-full transition-all ${mode === 'SIMPLE' && activeColor === 'WHITE' ? 'bg-blue-100 ring-2 ring-blue-500 scale-110' : 'hover:bg-gray-100 opacity-60 hover:opacity-100'}`}
-                        onClick={() => {
-                            setMode('SIMPLE');
-                            setToolMode('STONE');
-                            const newHistory = [...history];
-                            newHistory[currentMoveIndex] = { ...newHistory[currentMoveIndex], activeColor: 'WHITE' };
-                            setHistory(newHistory);
-                        }}
-                    >
-                        <svg width="24" height="24" viewBox="0 0 24 24" className="text-gray-600">
-                            {/* Use stroke or gray fill for white stone appearance on white bg? */
-                              /* The previous icon used 'text-gray-600' which is dark gray. 
-                                 Real white stone needs border. */ }
-                            <circle cx="12" cy="12" r="9.5" fill="white" stroke="currentColor" strokeWidth="1" />
-                        </svg>
-                    </button>
-
-                    {/* Numbered Stone */}
-                    <button
-                        title="Numbered Mode"
-                        className={`p-2 rounded-full transition-all ${mode === 'NUMBERED' ? 'bg-blue-100 ring-2 ring-blue-500 scale-110' : 'hover:bg-gray-100 opacity-60 hover:opacity-100'}`}
-                        onClick={() => {
-                            setMode('NUMBERED');
-                            setToolMode('STONE');
-                            // Force Black
-                            const newHistory = [...history];
-                            newHistory[currentMoveIndex] = { ...newHistory[currentMoveIndex], activeColor: 'BLACK' };
-                            setHistory(newHistory);
-                        }}
-                    >
-                        <svg width="24" height="24" viewBox="0 0 24 24" className="text-black">
-                            {/* Dynamic color for icon? activeColor? 
-                                User asked for "Number Stone Icon". Usually implies a generic numbered stone.
-                                Let's use Black 1 for icon. */}
-                            <circle cx="12" cy="12" r="10" fill="currentColor" />
-                            <text x="12" y="17" textAnchor="middle" fill="white" fontSize="14" fontWeight="bold" fontFamily="sans-serif">1</text>
-                        </svg>
-                    </button>
-                    {/* Label Mode */}
-                    <button
-                        title="Label Mode (A, B, C...)"
-                        onClick={() => setToolMode('LABEL')}
-                        className={`ml-4 w-10 h-10 rounded font-bold border flex items-center justify-center transition-all ${toolMode === 'LABEL' ? 'bg-blue-100 border-blue-500 text-blue-700' : 'bg-white border-gray-300 hover:bg-gray-100'}`}
-                    >
-                        A
-                    </button>
-
-                    {/* Symbol Mode Dropdown */}
-                    <select
-                        title="Symbol Mode"
-                        value={toolMode === 'SYMBOL' ? selectedSymbol : ''}
-                        onChange={(e) => {
-                            const val = e.target.value as SymbolType;
-                            setSelectedSymbol(val);
-                            setToolMode('SYMBOL');
-                        }}
-                        className={`ml-2 h-10 rounded border px-1 text-sm bg-white cursor-pointer transition-all ${toolMode === 'SYMBOL' ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-300'}`}
-                    >
-                        <option value="" disabled hidden>記号</option>
-                        <option value="TRI">△</option>
-                        <option value="CIR">◯</option>
-                        <option value="SQR">□</option>
-                        <option value="X">✕</option>
-                    </select>
-                </div>
-            </div>
-
-
-
-            {/* Tools: Next, Coords, Size */}
-            <div className="flex flex-col gap-2 bg-gray-50 p-2 rounded">
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => setShowCoordinates(!showCoordinates)}
-                        className={`text-xs px-2 py-1 rounded border ${showCoordinates ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300'} whitespace-nowrap`}
-                    >
-                        Coords: {showCoordinates ? 'ON' : 'OFF'}
-                    </button>
-
-                    {/* Navigation Group (Moved from Top) */}
-                    <div className="flex bg-gray-200 rounded p-1 gap-1">
-                        <button onClick={stepFirst} disabled={currentMoveIndex === 0} title="First" className="px-2 font-bold hover:bg-white rounded disabled:opacity-30">|&lt;</button>
-                        <button onClick={stepBack} disabled={currentMoveIndex === 0} title="Back (Backspace/Left)" className="px-2 font-bold hover:bg-white rounded disabled:opacity-30">&lt;</button>
-                        <div className="text-xs flex items-center min-w-[30px] justify-center bg-white rounded px-2">{mode === 'NUMBERED' ? `${currentMoveIndex}` : '-'}</div>
-                        <button onClick={stepForward} disabled={currentMoveIndex === history.length - 1} title="Next (Right)" className="px-2 font-bold hover:bg-white rounded disabled:opacity-30">&gt;</button>
-                        <button onClick={stepLast} disabled={currentMoveIndex === history.length - 1} title="Last" className="px-2 font-bold hover:bg-white rounded disabled:opacity-30">&gt;|</button>
-                    </div>
-                </div>
-
-
-                {/* Size Switcher */}
-                <div className="flex items-center gap-2 pt-1 border-t border-gray-200">
-                    <span className="text-xs text-gray-500">Size:</span>
-                    {[19, 13, 9].map(s => (
-                        <button
-                            key={s}
-                            onClick={() => setBoardSize(s)}
-                            className={`text - xs px - 2 py - 0.5 rounded border ${boardSize === s ? 'bg-gray-700 text-white' : 'text-gray-600 border-gray-300 hover:bg-gray-200'} `}
-                        >
-                            {s}路
-                        </button>
-                    ))}
-                </div>
-
-                {mode === 'NUMBERED' && (
-                    <div className="flex items-center gap-2 pt-1 border-t border-gray-200">
-                        <label className="text-xs">Start #:</label>
-                        <input
-                            type="number"
-                            className="w-12 border rounded px-1 text-center"
-                            value={nextNumber}
-                            onChange={(e) => setNextNumberDirectly(Math.max(1, parseInt(e.target.value) || 1))}
-                        />
-                    </div>
-                )}
-            </div>
-
-            {/* SGF & Export */}
-            {/* Actions (Moved to Header) */}
-            {/* Actions (Moved to Header) */}
-            <div className="text-xs text-center text-gray-400 mt-2 space-y-1 pt-4 border-t border-gray-100">
-                <div>L: Place / R: Delete / Wheel: Nav</div>
-                <div>DblClick: Swap Color / Switch Tool</div>
-                <div>**Ctrl+V: Paste SGF**</div>
-            </div>
-        </div>
+        </>
 
     );
 }
