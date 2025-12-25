@@ -53,7 +53,7 @@ const PrintSettingsModal: React.FC<PrintSettingsModalProps> = ({ isOpen, onClose
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4 font-sans text-sm isolate" onClick={onClose}>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4 font-sans text-sm isolate print:hidden" onClick={onClose}>
             <div className="bg-gray-100 rounded-lg shadow-xl w-full max-w-sm border border-gray-400" onClick={e => e.stopPropagation()}>
                 {/* Header */}
                 <div className="flex justify-between items-center p-2 border-b border-gray-300 bg-gray-200 rounded-t-lg">

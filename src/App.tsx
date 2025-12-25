@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { flushSync } from 'react-dom';
 import GoBoard, { ViewRange, BoardState, StoneColor, Marker } from './components/GoBoard'
 import GameInfoModal from './components/GameInfoModal'
 import PrintSettingsModal, { PrintSettings } from './components/PrintSettingsModal'
@@ -1105,29 +1106,24 @@ function App() {
         return s;
     };
 
-    const [isPrintingSequence, setIsPrintingSequence] = useState(false);
-
-    useEffect(() => {
-        if (isPrintingSequence) {
-            // Ensure render is complete and styles are applied
-            const timer = setTimeout(() => {
-                try {
-                    window.focus();
-                    window.print();
-                } catch (e) {
-                    console.error('Print execution failed:', e);
-                } finally {
-                    setIsPrintingSequence(false);
-                }
-            }, 100);
-            return () => clearTimeout(timer);
-        }
-    }, [isPrintingSequence]);
-
     const handlePrintRequest = (settings: PrintSettings) => {
-        setPrintSettings(settings);
-        setShowPrintModal(false);
-        setIsPrintingSequence(true);
+        // Force synchronous update to ensure DOM is ready for print
+        // while maintaining the user gesture context.
+        flushSync(() => {
+            setPrintSettings(settings);
+            // We keep the modal "open" in state, but hide it via CSS (@media print)
+            // so that window.print() can run immediately.
+        });
+
+        try {
+            window.print();
+        } catch (e) {
+            console.error('Print failed:', e);
+            alert('印刷の起動に失敗しました。');
+        } finally {
+            // Close modal after print dialog interaction is done
+            setShowPrintModal(false);
+        }
     };
 
     const loadSGF = (content: string) => {
