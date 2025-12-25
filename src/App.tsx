@@ -1113,6 +1113,7 @@ function App() {
         const sgf = getSGFString();
         localStorage.setItem('gorw_temp_print_sgf', sgf);
         localStorage.setItem('gorw_temp_print_settings', JSON.stringify(settings));
+        localStorage.setItem('gorw_temp_print_index', currentMoveIndex.toString());
 
         // Open new tab (relative path to index.html)
         const printWindow = window.open('index.html?print_job=true', '_blank');
@@ -1141,6 +1142,10 @@ function App() {
                 if (sgf.length > 20) { // Simple check if it's a valid SGF
                     try {
                         loadSGF(sgf);
+                        const savedIndex = localStorage.getItem('gorw_temp_print_index');
+                        if (savedIndex !== null) {
+                            setCurrentMoveIndex(parseInt(savedIndex, 10));
+                        }
                     } catch (e) {
                         alert("Failed to load SGF data: " + e);
                     }
