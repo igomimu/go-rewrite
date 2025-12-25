@@ -1105,19 +1105,29 @@ function App() {
         return s;
     };
 
-    const handlePrintRequest = async (settings: PrintSettings) => {
+    const [isPrintingSequence, setIsPrintingSequence] = useState(false);
+
+    useEffect(() => {
+        if (isPrintingSequence) {
+            // Ensure render is complete and styles are applied
+            const timer = setTimeout(() => {
+                try {
+                    window.focus();
+                    window.print();
+                } catch (e) {
+                    console.error('Print execution failed:', e);
+                } finally {
+                    setIsPrintingSequence(false);
+                }
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [isPrintingSequence]);
+
+    const handlePrintRequest = (settings: PrintSettings) => {
         setPrintSettings(settings);
         setShowPrintModal(false);
-
-        // Wait for render to update with new settings
-        await new Promise(r => setTimeout(r, 500));
-        try {
-            window.focus();
-            window.print();
-        } catch (e) {
-            console.error('Print failed:', e);
-            alert('印刷ダイアログの起動に失敗しました。');
-        }
+        setIsPrintingSequence(true);
     };
 
     const loadSGF = (content: string) => {
