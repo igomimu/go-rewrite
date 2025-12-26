@@ -1326,7 +1326,7 @@ function App() {
         const nodes: import('./utils/sgfUtils').SgfNode[] = [];
         const size = boardSize;
 
-        for (let i = 1; i <= currentMoveIndex; i++) {
+        for (let i = 1; i < history.length; i++) {
             const prev = history[i - 1];
             const curr = history[i];
 
