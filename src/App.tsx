@@ -1154,8 +1154,21 @@ function App() {
                 // Set title
                 document.title = "Print Preview - GORewrite";
 
-                // Auto-print removed to prevent "unresponsive" issues. 
-                // User can click "Print Now" button.
+                const triggerPrint = () => {
+                    try {
+                        window.focus();
+                        window.print();
+                    } catch (e) {
+                        console.warn("Auto-print failed", e);
+                    }
+                };
+
+                // Auto-print with delay to ensure rendering
+                if (document.readyState === 'complete') {
+                    setTimeout(triggerPrint, 800);
+                } else {
+                    window.addEventListener('load', () => setTimeout(triggerPrint, 800), { once: true });
+                }
             }
         }
     }, []);
