@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom'
 import GoBoard, { ViewRange, BoardState, StoneColor, Marker } from './components/GoBoard'
 import GameInfoModal from './components/GameInfoModal'
 import PrintSettingsModal, { PrintSettings } from './components/PrintSettingsModal'
-import { exportToPng } from './utils/exportUtils'
+import { exportToPng, exportToSvg } from './utils/exportUtils'
 import { checkCaptures } from './utils/gameLogic'
 import { parseSGF, generateSGF } from './utils/sgfUtils'
 import { generatePrintFigures } from './utils/printUtils'
@@ -98,6 +98,15 @@ function App() {
             return localStorage.getItem('gorw_is_monochrome') === 'true';
         } catch { return false; }
     });
+
+    // Export Mode Persistence
+    const [exportMode, setExportMode] = useState<'SVG' | 'PNG'>(() => {
+        try {
+            const saved = localStorage.getItem('gorw_export_mode');
+            return (saved === 'SVG' || saved === 'PNG') ? saved : 'SVG';
+        } catch { return 'SVG'; }
+    });
+
     const [showCapturedInExport, setShowCapturedInExport] = useState(false);
     const [isFigureMode, setIsFigureMode] = useState(false); // Internal State for Export Auto-Switch
 
@@ -891,7 +900,7 @@ function App() {
         return restored;
     }, [history, currentMoveIndex, boardSize]);
 
-    const performExport = useCallback(async (bounds: { minX: number, maxX: number, minY: number, maxY: number }, restoredStones: { x: number, y: number, color: StoneColor, text: string }[] = []) => {
+    const performExport = useCallback(async (bounds: { minX: number, maxX: number, minY: number, maxY: number }, restoredStones: { x: number, y: number, color: StoneColor, text: string }[] = [], isSvgMode: boolean = true) => {
         if (!svgRef.current) return;
 
         const CELL_SIZE = 40;
@@ -1062,7 +1071,12 @@ function App() {
         clone.setAttribute('width', `${width}`);
         clone.setAttribute('height', `${height}`);
 
-        await exportToPng(clone, 3, isMonochrome ? '#FFFFFF' : '#DCB35C');
+        const bgColor = isMonochrome ? '#FFFFFF' : '#DCB35C';
+        if (isSvgMode) {
+            await exportToSvg(clone, 'goban_export.svg', bgColor);
+        } else {
+            await exportToPng(clone, 3, bgColor);
+        }
     }, [hiddenMoves, showCoordinates, showCapturedInExport, isMonochrome]);
 
     // Kifu Metadata
@@ -1260,7 +1274,10 @@ function App() {
 
 
 
-    const handleExport = useCallback(async () => {
+    const handleExport = useCallback(async (forcedMode?: 'SVG' | 'PNG') => {
+        const modeToUse = forcedMode || exportMode;
+        const isSvg = modeToUse === 'SVG';
+
         const boardEl = svgRef.current;
         if (!boardEl) return;
 
@@ -1287,10 +1304,22 @@ function App() {
 
             if (finalMinX === Infinity) { finalMinX = 1; finalMaxX = boardSize; finalMinY = 1; finalMaxY = boardSize; }
 
+            const performExportAction = async (element: SVGSVGElement) => {
+                if (isSvg) {
+                    await exportToSvg(element, 'goban_export.svg', isMonochrome ? '#FFFFFF' : '#DCB35C');
+                } else {
+                    await exportToPng(element, 3, isMonochrome ? '#FFFFFF' : '#DCB35C');
+                }
+            };
+
             if (finalHasStones) {
-                await performExport({ minX: finalMinX, maxX: finalMaxX, minY: finalMinY, maxY: finalMaxY }, restored);
+                // Pass wrapper to performExport? No, performExport handles the restricted view render.
+                // We need to pass the mode to performExport or handle logic there.
+                // Refactor: performExport takes callback? 
+
+                await performExport({ minX: finalMinX, maxX: finalMaxX, minY: finalMinY, maxY: finalMaxY }, restored, isSvg);
             } else {
-                if (svgRef.current) await exportToPng(svgRef.current, 3, isMonochrome ? '#FFFFFF' : '#DCB35C');
+                if (svgRef.current) await performExportAction(svgRef.current);
             }
         } finally {
             // Revert to Operation Mode (Number 11)
@@ -1944,10 +1973,23 @@ function App() {
                             📂
                         </button>
 
-                        <button onClick={() => { if (selectionStart && selectionEnd) handleExportSelection(); else handleExport(); }}
-                            title="Copy Image (Ctrl+F)" className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center font-bold transition-colors">
-                            📷
-                        </button>
+                        <div className="flex bg-indigo-50 rounded-full items-center p-0.5 border border-indigo-100">
+                            <button onClick={() => { if (selectionStart && selectionEnd) handleExportSelection(); else handleExport(); }}
+                                title={`Export as ${exportMode} (Click to save)`} className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center font-bold transition-colors">
+                                📷
+                            </button>
+                            <button
+                                title="Toggle Export Format (SVG/PNG)"
+                                onClick={() => {
+                                    const next = exportMode === 'SVG' ? 'PNG' : 'SVG';
+                                    setExportMode(next);
+                                    localStorage.setItem('gorw_export_mode', next);
+                                }}
+                                className="text-[10px] font-bold px-1.5 py-0.5 rounded-r-full bg-white border-l shadow-sm text-gray-600 hover:text-blue-600 h-6 mr-1"
+                            >
+                                {exportMode}
+                            </button>
+                        </div>
 
                         {/* Save As */}
 

@@ -108,3 +108,57 @@ export async function exportToPng(svgElement: SVGSVGElement, scale = 1, backgrou
         console.error('Clipboard write failed', error);
     }
 }
+
+/**
+ * Exports an SVG element as an SVG file download.
+ * Useful for high-quality printing or editing in vector software.
+ */
+export async function exportToSvg(svgElement: SVGSVGElement, filename = 'go_board.svg', backgroundColor = '#DCB35C'): Promise<void> {
+    const clone = svgElement.cloneNode(true) as SVGSVGElement;
+
+    // Remove "data-export-ignore" elements
+    const ignoredElements = clone.querySelectorAll('[data-export-ignore="true"]');
+    ignoredElements.forEach(el => el.remove());
+
+    let width, height;
+    if (clone.getAttribute('viewBox')) {
+        const vb = clone.getAttribute('viewBox')!.split(' ').map(Number);
+        width = vb[2];
+        height = vb[3];
+    } else {
+        const bBox = svgElement.getBoundingClientRect();
+        width = bBox.width;
+        height = bBox.height;
+        clone.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    }
+
+    clone.setAttribute('width', `${width}px`);
+    clone.setAttribute('height', `${height}px`);
+
+    // Explicitly set background color on the SVG root logic if needed
+    // Typically SVG background is transparent unless a rect is behind.
+    // However, we want to match PNG look.
+    // GoBoard component might not have a bg rect.
+    // Let's wrap content in a group and put a rect behind it? 
+    // Or just set style on svg (which transparency might ignore in some viewers, but inkscape handles).
+    // Better: Add a rect as the first child if not present.
+    // But simplistic approach: style.backgroundColor.
+    clone.style.backgroundColor = backgroundColor;
+
+    // Serialize
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(clone);
+    const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    // Trigger Download
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Cleanup
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+}
