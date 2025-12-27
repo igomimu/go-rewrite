@@ -1901,21 +1901,10 @@ function App() {
                 {/* Print Area Removed (Moved Outside) */}
                 <div className="flex justify-between w-full items-center mb-2">
                     <div className="flex items-baseline gap-2">
-                        <span className="text-xs text-gray-400 font-normal pl-1">v35.0</span>
+                        <span className="text-[10px] text-gray-400 font-normal pl-1">v35.0</span>
                     </div>
-                    <div className="flex gap-1 items-center">
-                        <button
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                console.log('Print button clicked', showPrintModal);
-                                setShowPrintModal(true);
-                            }}
-                            className="w-7 h-7 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center justify-center font-bold text-base transition-all"
-                            title="Print (Ctrl+P)"
-                        >
-                            🖨️
-                        </button>
+                    <div className="flex gap-2 items-center">
+
                         {/* Hidden Input for Open SGF */}
                         <input
                             type="file"
@@ -1925,57 +1914,81 @@ function App() {
                             onChange={handleFileInputChange}
                             style={{ display: 'none' }}
                         />
-                        {/* Compact Action Buttons */}
-                        <button onClick={clearBoard} title="New / Clear (Alt+N)" className="w-7 h-7 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center font-bold transition-all text-base">
-                            🗑️
-                        </button>
 
-                        {/* Edit Group (Undo/Redo) */}
-                        <div className="flex gap-0.5 mx-0.5">
+                        {/* Group 1: File Operations */}
+                        <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
+                            <button onClick={clearBoard} title="New / Clear (Alt+N)" className="w-6 h-6 rounded-md bg-white hover:bg-red-50 text-red-600 flex items-center justify-center font-bold transition-all text-sm shadow-sm">
+                                🗑️
+                            </button>
+                            <button onClick={handleOpenSGF} title="Open SGF (Ctrl+O)" className="w-6 h-6 rounded-md bg-white hover:bg-blue-50 text-blue-600 flex items-center justify-center font-bold transition-all text-sm shadow-sm">
+                                📂
+                            </button>
+                            <button onClick={handleOverwriteSave} title="Overwrite Save (Save)" className="w-6 h-6 rounded-md bg-white hover:bg-green-50 text-green-700 flex items-center justify-center font-bold transition-all text-sm shadow-sm">
+                                💾
+                            </button>
+                            <button onClick={handleSaveSGF} title="Save As... (Ctrl+S)" className="w-6 h-6 rounded-md bg-white hover:bg-orange-50 text-orange-600 flex items-center justify-center font-bold transition-all shadow-sm">
+                                <img src="/icons/save_as_v2.png" alt="Save As" className="w-4 h-4 object-contain opacity-80" />
+                            </button>
+                        </div>
+
+                        {/* Group 2: Edit (Undo/Redo) */}
+                        <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
                             <button onClick={deleteLastMove} disabled={currentMoveIndex === 0} title="Delete Last Move (Delete/Ctrl+Z)"
-                                className="w-7 h-7 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 flex items-center justify-center font-bold text-base transition-all">
+                                className="w-6 h-6 rounded-md bg-white hover:bg-red-50 text-red-700 disabled:opacity-50 disabled:bg-gray-50 flex items-center justify-center font-bold text-sm transition-all shadow-sm">
                                 ⌫
                             </button>
                             <button onClick={restoreMove} disabled={redoStack.length === 0} title="Restore Deleted Move (Ctrl+Y)"
-                                className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50 flex items-center justify-center font-bold text-base transition-all">
+                                className="w-6 h-6 rounded-md bg-white hover:bg-blue-50 text-blue-700 disabled:opacity-50 disabled:bg-gray-50 flex items-center justify-center font-bold text-sm transition-all shadow-sm">
                                 ↻
                             </button>
                         </div>
 
-                        {/* Overwrite Save */}
-                        <button onClick={handleOverwriteSave} title="Overwrite Save (Save)" className="w-7 h-7 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 flex items-center justify-center font-bold transition-all text-base">
-                            💾
-                        </button>
+                        {/* Group 3: View & Tools */}
+                        <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
+                            <button
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setShowPrintModal(true);
+                                }}
+                                className="w-6 h-6 rounded-md bg-white hover:bg-gray-50 text-gray-600 flex items-center justify-center font-bold text-sm transition-all shadow-sm"
+                                title="Print (Ctrl+P)"
+                            >
+                                🖨️
+                            </button>
+                            <button
+                                onClick={() => setShowCapturedInExport(!showCapturedInExport)}
+                                title={`Show Captured Stones in Export: ${showCapturedInExport ? 'ON' : 'OFF'}`}
+                                className={`w-6 h-6 rounded-md flex items-center justify-center font-bold transition-all text-sm shadow-sm ${showCapturedInExport ? 'bg-purple-100 text-purple-700 ring-1 ring-purple-300' : 'bg-white text-gray-400 hover:text-purple-500'}`}
+                            >
+                                👻
+                            </button>
+                            <button
+                                onClick={() => setShowNumbers(!showNumbers)}
+                                title={`Toggle Numbers: ${showNumbers ? 'ON' : 'OFF'}`}
+                                className={`w-6 h-6 rounded-md flex items-center justify-center font-bold transition-all text-sm shadow-sm ${showNumbers ? 'bg-cyan-100 text-cyan-700 ring-1 ring-cyan-300' : 'bg-white text-gray-400 hover:text-cyan-500'}`}
+                            >
+                                ⑧
+                            </button>
+                            <button onClick={handlePass} disabled={mode !== 'NUMBERED'} title="Pass"
+                                className="w-6 h-6 rounded-md bg-gray-200 hover:bg-gray-300 disabled:opacity-50 font-bold flex items-center justify-center text-sm shadow-sm text-gray-700">
+                                ✋
+                            </button>
+                        </div>
 
-                        {/* Save As */}
-                        <button onClick={handleSaveSGF} title="Save As... (Ctrl+S)" className="w-7 h-7 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 flex items-center justify-center font-bold transition-all">
-                            <img src="/icons/save_as_v2.png" alt="Save As" className="w-5 h-5 object-contain opacity-80" />
-                        </button>
-
-                        <button onClick={handleOpenSGF} title="Open SGF (Ctrl+O)" className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center justify-center font-bold transition-all text-base">
-                            📂
-                        </button>
-
-                        <div className="w-px h-5 bg-gray-300 mx-0.5"></div>
-
-                        {/* Export Group */}
-                        <div className="flex bg-indigo-50 rounded-lg items-center px-0.5 border border-indigo-100 gap-0.5">
-                            {/* Copy Image */}
+                        {/* Group 4: Export */}
+                        <div className="flex bg-indigo-50 rounded-lg items-center px-0.5 py-0.5 border border-indigo-100 gap-0.5">
                             <button onClick={() => { if (selectionStart && selectionEnd) handleExportSelection(); else handleExport(); }}
-                                title={`Copy as ${exportMode} (Click to Copy)`} className="w-7 h-7 rounded-md bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center font-bold transition-all text-base">
+                                title={`Copy as ${exportMode} (Click to Copy)`} className="w-6 h-6 rounded-md bg-white text-indigo-600 hover:bg-indigo-50 flex items-center justify-center font-bold transition-all text-sm shadow-sm">
                                 📷
                             </button>
-
-                            {/* Save PNG Button */}
                             <button
                                 onClick={() => handleExport('PNG', 'DOWNLOAD')}
-                                title="Save as PNG Image"
-                                className="w-7 h-7 rounded-md bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center font-bold transition-all text-base border-l border-indigo-200"
+                                title="Save as PNG..."
+                                className="w-6 h-6 rounded-md bg-white text-indigo-600 hover:bg-indigo-50 flex items-center justify-center font-bold transition-all text-sm shadow-sm"
                             >
                                 ⬇️
                             </button>
-
-                            {/* Format Toggle */}
                             <button
                                 title="Toggle Export Format (SVG/PNG)"
                                 onClick={() => {
@@ -1983,62 +1996,29 @@ function App() {
                                     setExportMode(next);
                                     localStorage.setItem('gorw_export_mode', next);
                                 }}
-                                className="text-[10px] font-bold px-1 py-0.5 rounded bg-white border shadow-sm text-gray-600 hover:text-blue-600 ml-1 h-5"
+                                className="text-[9px] font-bold px-1 rounded bg-white border shadow-sm text-gray-600 hover:text-blue-600 ml-0.5 h-6 flex items-center"
                             >
                                 {exportMode}
                             </button>
                         </div>
 
-                        {/* Save As */}
-
-                        <button
-                            onClick={() => setShowCapturedInExport(!showCapturedInExport)}
-                            title={`Show Captured Stones in Export: ${showCapturedInExport ? 'ON' : 'OFF'}`}
-                            className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold transition-all text-base ${showCapturedInExport ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
-                        >
-                            👻
-                        </button>
-
-                        <button
-                            onClick={() => setShowNumbers(!showNumbers)}
-                            title={`Toggle Numbers: ${showNumbers ? 'ON' : 'OFF'}`}
-                            className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold transition-all text-base ${showNumbers ? 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
-                        >
-                            ⑧
-                        </button>
-
-
-
-
-
-                        <div className="w-px h-5 bg-gray-300 mx-0.5"></div>
-
-
-                        {/* Pass Button */}
-                        <button onClick={handlePass} disabled={mode !== 'NUMBERED'} title="Pass"
-                            className="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 font-bold flex items-center justify-center h-7 ml-0.5 text-base">
-                            ✋
-                        </button>
-
-                        <div className="w-px h-5 bg-gray-300 mx-0.5"></div>
-
-                        {/* Open in New Tab */}
-                        <button
-                            onClick={() => window.open('index.html', '_blank')}
-                            className="w-7 h-7 rounded-lg bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center font-bold text-xs transition-all"
-                            title="Open in New Tab (Maximize)"
-                        >
-                            ↗
-                        </button>
-
-                        {/* Help Button */}
-                        <button
-                            onClick={() => setShowHelp(true)}
-                            className="w-7 h-7 rounded-lg bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center font-bold text-xs transition-all"
-                            title="Help"
-                        >
-                            ?
-                        </button>
+                        {/* Group 5: System */}
+                        <div className="flex items-center gap-1 pl-1">
+                            <button
+                                onClick={() => window.open('index.html', '_blank')}
+                                className="w-6 h-6 rounded-md bg-gray-100 text-gray-500 hover:bg-gray-200 flex items-center justify-center font-bold text-[10px] transition-all"
+                                title="Open in New Tab (Maximize)"
+                            >
+                                ↗
+                            </button>
+                            <button
+                                onClick={() => setShowHelp(true)}
+                                className="w-6 h-6 rounded-md bg-gray-100 text-gray-500 hover:bg-gray-200 flex items-center justify-center font-bold text-xs transition-all"
+                                title="Help"
+                            >
+                                ?
+                            </button>
+                        </div>
                     </div>
                 </div>
 
