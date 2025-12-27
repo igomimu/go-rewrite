@@ -15,7 +15,9 @@
  * - Accept optional backgroundColor.
  * - Remove elements marked with data-export-ignore="true" (like selection rect).
  */
-export async function exportToPng(svgElement: SVGSVGElement, scale = 1, backgroundColor = '#DCB35C'): Promise<void> {
+export async function exportToPng(svgElement: SVGSVGElement, options: { scale?: number, backgroundColor?: string, destination?: 'CLIPBOARD' | 'DOWNLOAD', filename?: string } = {}): Promise<void> {
+    const { scale = 1, backgroundColor = '#DCB35C', destination = 'CLIPBOARD', filename = 'go_board.png' } = options;
+
     // 1. Clone the SVG to manipulate it without affecting the DOM
     const clone = svgElement.cloneNode(true) as SVGSVGElement;
 
@@ -23,28 +25,14 @@ export async function exportToPng(svgElement: SVGSVGElement, scale = 1, backgrou
     const ignoredElements = clone.querySelectorAll('[data-export-ignore="true"]');
     ignoredElements.forEach(el => el.remove());
 
-
-
-    // 4.5 Thicken White Stones in Monochrome Mode -> REMOVED (User requested thinner lines)
-    // if (backgroundColor.toUpperCase() === '#FFFFFF') {
-    //     const whiteStones = clone.querySelectorAll('.white-stone');
-    //     whiteStones.forEach(el => {
-    //         (el as SVGCircleElement).style.strokeWidth = '3px';
-    //     });
-    // }
-
     // 2. Get the crop aspect ratio / dimensions from viewBox
-    // App.tsx logic ensures viewBox is set correctly on the element passed here.
-    // However, if we receive a raw element, use its current viewBox values.
     let width, height;
 
     if (clone.getAttribute('viewBox')) {
         const vb = clone.getAttribute('viewBox')!.split(' ').map(Number);
-        // x = vb[0]; y = vb[1]; // Unused
         width = vb[2];
         height = vb[3];
     } else {
-        // Fallback (should not happen with GoBoard)
         const bBox = svgElement.getBoundingClientRect();
         width = bBox.width;
         height = bBox.height;
@@ -52,13 +40,10 @@ export async function exportToPng(svgElement: SVGSVGElement, scale = 1, backgrou
     }
 
     // 3. FORCE Width/Height Attributes to match viewBox (Pixels)
-    // This fixes the bug where Notion/Browsers ignore viewBox if width/height are 100% or unset during Rasterization.
     clone.setAttribute('width', `${width}px`);
     clone.setAttribute('height', `${height}px`);
 
     // 4. Handle Background Color
-    // Tailwind classes (bg-[#DCB35C]) are LOST in serialization because stylesheets aren't inlined.
-    // We explicitly set the style on the clone.
     clone.style.backgroundColor = backgroundColor;
 
     // 5. Serialize
@@ -84,7 +69,7 @@ export async function exportToPng(svgElement: SVGSVGElement, scale = 1, backgrou
 
     if (!ctx) throw new Error('Could not get canvas context');
 
-    // 8. Fill Background (Double Safety)
+    // 8. Fill Background
     ctx.fillStyle = backgroundColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -94,20 +79,37 @@ export async function exportToPng(svgElement: SVGSVGElement, scale = 1, backgrou
 
     URL.revokeObjectURL(url);
 
-    // 10. Write to Clipboard
+    // 10. Output
     try {
         const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
         if (!blob) throw new Error('Could not generate PNG blob');
 
-        // Ensure focus for Clipboard API
-        window.focus();
-        await navigator.clipboard.write([
-            new ClipboardItem({ 'image/png': blob })
-        ]);
-        // alert('Copied to clipboard!'); // User requested no confirmation
-        console.log('Image copied to clipboard successfully.');
+        if (destination === 'CLIPBOARD') {
+            // Ensure focus for Clipboard API
+            window.focus();
+            await navigator.clipboard.write([
+                new ClipboardItem({ 'image/png': blob })
+            ]);
+            console.log('Image copied to clipboard successfully.');
+        } else {
+            // Download
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            console.log('Image downloaded successfully.');
+        }
+
     } catch (error) {
-        console.error('Clipboard write failed', error);
+        console.error('Export failed', error);
+        if (destination === 'CLIPBOARD') {
+            alert('クリップボードへのコピーに失敗しました。');
+        } else {
+            alert('画像の保存に失敗しました。');
+        }
     }
 }
 

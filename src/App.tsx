@@ -900,9 +900,10 @@ function App() {
         return restored;
     }, [history, currentMoveIndex, boardSize]);
 
-    const performExport = useCallback(async (bounds: { minX: number, maxX: number, minY: number, maxY: number }, restoredStones: { x: number, y: number, color: StoneColor, text: string }[] = [], isSvgMode: boolean = true) => {
+    const performExport = useCallback(async (bounds: { minX: number, maxX: number, minY: number, maxY: number }, restoredStones: { x: number, y: number, color: StoneColor, text: string }[] = [], options: { isSvg: boolean, destination?: 'CLIPBOARD' | 'DOWNLOAD', filename?: string }) => {
         if (!svgRef.current) return;
 
+        const { isSvg, destination = 'CLIPBOARD', filename } = options;
         const CELL_SIZE = 40;
         const MARGIN = 40;
         const PADDING = 20;
@@ -979,11 +980,6 @@ function App() {
                 // We need to calculate widths exactly as GoBoard.tsx does to match layout.
                 const boardDisplayWidth = (maxX - minX + 1) * CELL_SIZE;
 
-                // We need to know the width of each item.
-                // hiddenMovesData has the structure: { left: [], right: ... }
-                // We iterate `hiddenMoves` (which is passed to this function or available as prop? App has `footer` state?)
-                // Wait, `performExport` uses `hiddenMoves` variable which is `footerData` from `hiddenMovesData`.
-
                 let currentX = 0;
                 let currentY = 0;
                 let maxRowY = 0;
@@ -1010,15 +1006,6 @@ function App() {
                         currentY = 0;
                     } else {
                         if (currentX + itemWidth + 20 + itemWidth > boardDisplayWidth) {
-                            // Logic check: GoBoard uses `prev.x + prev.width + 20 + itemWidth > boardDisplayWidth`
-                            // Here `currentX` acts as `prev.x + prev.width`.
-                            // So if `currentX + 20 + itemWidth > boardDisplayWidth` -> Wrap.
-                            // But `currentX` is the END of previous item?
-                            // Let's align variables.
-
-                            // Let's accumulate:
-                            // If `currentX + 20 + itemWidth` > `boardDisplayWidth` -> Wrap.
-
                             if (currentX + 20 + itemWidth > boardDisplayWidth) {
                                 currentX = 0;
                                 currentY += 40;
@@ -1026,11 +1013,6 @@ function App() {
                                 currentX += 20;
                             }
                         } else {
-                            // If it fits?
-                            // GoBoard logic:
-                            // if (prev.x + prev.width + 20 + itemWidth > boardDisplayWidth)
-
-                            // Converting to incremental:
                             if (currentX + 20 + itemWidth > boardDisplayWidth) {
                                 currentX = 0;
                                 currentY += 40;
@@ -1072,10 +1054,10 @@ function App() {
         clone.setAttribute('height', `${height}`);
 
         const bgColor = isMonochrome ? '#FFFFFF' : '#DCB35C';
-        if (isSvgMode) {
+        if (isSvg) {
             await exportToSvg(clone, bgColor);
         } else {
-            await exportToPng(clone, 3, bgColor);
+            await exportToPng(clone, { scale: 3, backgroundColor: bgColor, destination: destination, filename });
         }
     }, [hiddenMoves, showCoordinates, showCapturedInExport, isMonochrome]);
 
@@ -1274,9 +1256,10 @@ function App() {
 
 
 
-    const handleExport = useCallback(async (forcedMode?: 'SVG' | 'PNG') => {
+    const handleExport = useCallback(async (forcedMode?: 'SVG' | 'PNG', destination?: 'CLIPBOARD' | 'DOWNLOAD') => {
         const modeToUse = forcedMode || exportMode;
         const isSvg = modeToUse === 'SVG';
+        const filename = `go_board_${new Date().toISOString().slice(0, 10)}.png`;
 
         const boardEl = svgRef.current;
         if (!boardEl) return;
@@ -1308,7 +1291,7 @@ function App() {
                 if (isSvg) {
                     await exportToSvg(element, isMonochrome ? '#FFFFFF' : '#DCB35C');
                 } else {
-                    await exportToPng(element, 3, isMonochrome ? '#FFFFFF' : '#DCB35C');
+                    await exportToPng(element, { scale: 3, backgroundColor: isMonochrome ? '#FFFFFF' : '#DCB35C', destination, filename });
                 }
             };
 
@@ -1317,7 +1300,7 @@ function App() {
                 // We need to pass the mode to performExport or handle logic there.
                 // Refactor: performExport takes callback? 
 
-                await performExport({ minX: finalMinX, maxX: finalMaxX, minY: finalMinY, maxY: finalMaxY }, restored, isSvg);
+                await performExport({ minX: finalMinX, maxX: finalMaxX, minY: finalMinY, maxY: finalMaxY }, restored, { isSvg, destination, filename });
             } else {
                 if (svgRef.current) await performExportAction(svgRef.current);
             }
@@ -1342,7 +1325,7 @@ function App() {
 
         try {
             const restored = showCapturedInExport ? getRestoredStones() : [];
-            await performExport({ minX: x1, maxX: x2, minY: y1, maxY: y2 }, restored);
+            await performExport({ minX: x1, maxX: x2, minY: y1, maxY: y2 }, restored, { isSvg: exportMode === 'SVG' });
         } finally {
             // Revert
             setIsFigureMode(false);
@@ -1918,9 +1901,9 @@ function App() {
                 {/* Print Area Removed (Moved Outside) */}
                 <div className="flex justify-between w-full items-center mb-2">
                     <div className="flex items-baseline gap-2">
-                        <span className="text-xs text-gray-400 font-normal pl-1">v34.0</span>
+                        <span className="text-xs text-gray-400 font-normal pl-1">v35.0</span>
                     </div>
-                    <div className="flex gap-2 items-center">
+                    <div className="flex gap-1 items-center">
                         <button
                             onClick={(e) => {
                                 e.preventDefault();
@@ -1928,7 +1911,7 @@ function App() {
                                 console.log('Print button clicked', showPrintModal);
                                 setShowPrintModal(true);
                             }}
-                            className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center font-bold text-lg"
+                            className="w-7 h-7 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center justify-center font-bold text-base transition-all"
                             title="Print (Ctrl+P)"
                         >
                             🖨️
@@ -1943,41 +1926,56 @@ function App() {
                             style={{ display: 'none' }}
                         />
                         {/* Compact Action Buttons */}
-                        <button onClick={clearBoard} title="New / Clear (Alt+N)" className="w-8 h-8 rounded-full bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center font-bold transition-colors">
+                        <button onClick={clearBoard} title="New / Clear (Alt+N)" className="w-7 h-7 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center font-bold transition-all text-base">
                             🗑️
                         </button>
 
-                        {/* Edit Group (Undo/Redo) - Moved to Left for separation */}
-                        <div className="flex gap-1 mx-1">
+                        {/* Edit Group (Undo/Redo) */}
+                        <div className="flex gap-0.5 mx-0.5">
                             <button onClick={deleteLastMove} disabled={currentMoveIndex === 0} title="Delete Last Move (Delete/Ctrl+Z)"
-                                className="w-8 h-8 rounded-full bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 flex items-center justify-center font-bold text-lg">
+                                className="w-7 h-7 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 flex items-center justify-center font-bold text-base transition-all">
                                 ⌫
                             </button>
                             <button onClick={restoreMove} disabled={redoStack.length === 0} title="Restore Deleted Move (Ctrl+Y)"
-                                className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50 flex items-center justify-center font-bold text-lg">
+                                className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50 flex items-center justify-center font-bold text-base transition-all">
                                 ↻
                             </button>
                         </div>
 
                         {/* Overwrite Save */}
-                        <button onClick={handleOverwriteSave} title="Overwrite Save (Save)" className="w-8 h-8 rounded-full bg-green-100 text-green-700 hover:bg-green-200 flex items-center justify-center font-bold transition-colors">
+                        <button onClick={handleOverwriteSave} title="Overwrite Save (Save)" className="w-7 h-7 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 flex items-center justify-center font-bold transition-all text-base">
                             💾
                         </button>
 
                         {/* Save As */}
-                        <button onClick={handleSaveSGF} title="Save As... (Ctrl+S)" className="w-8 h-8 rounded-full bg-orange-50 text-orange-600 hover:bg-orange-100 flex items-center justify-center font-bold transition-colors">
-                            <img src="/icons/save_as_v2.png" alt="Save As" className="w-6 h-6 object-contain opacity-80" />
+                        <button onClick={handleSaveSGF} title="Save As... (Ctrl+S)" className="w-7 h-7 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 flex items-center justify-center font-bold transition-all">
+                            <img src="/icons/save_as_v2.png" alt="Save As" className="w-5 h-5 object-contain opacity-80" />
                         </button>
 
-                        <button onClick={handleOpenSGF} title="Open SGF (Ctrl+O)" className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center justify-center font-bold transition-colors">
+                        <button onClick={handleOpenSGF} title="Open SGF (Ctrl+O)" className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center justify-center font-bold transition-all text-base">
                             📂
                         </button>
 
-                        <div className="flex bg-indigo-50 rounded-full items-center p-0.5 border border-indigo-100">
+                        <div className="w-px h-5 bg-gray-300 mx-0.5"></div>
+
+                        {/* Export Group */}
+                        <div className="flex bg-indigo-50 rounded-lg items-center px-0.5 border border-indigo-100 gap-0.5">
+                            {/* Copy Image */}
                             <button onClick={() => { if (selectionStart && selectionEnd) handleExportSelection(); else handleExport(); }}
-                                title={`Copy as ${exportMode} (Click to Copy)`} className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center font-bold transition-colors">
+                                title={`Copy as ${exportMode} (Click to Copy)`} className="w-7 h-7 rounded-md bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center font-bold transition-all text-base">
                                 📷
                             </button>
+
+                            {/* Save PNG Button */}
+                            <button
+                                onClick={() => handleExport('PNG', 'DOWNLOAD')}
+                                title="Save as PNG Image"
+                                className="w-7 h-7 rounded-md bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center font-bold transition-all text-base border-l border-indigo-200"
+                            >
+                                ⬇️
+                            </button>
+
+                            {/* Format Toggle */}
                             <button
                                 title="Toggle Export Format (SVG/PNG)"
                                 onClick={() => {
@@ -1985,7 +1983,7 @@ function App() {
                                     setExportMode(next);
                                     localStorage.setItem('gorw_export_mode', next);
                                 }}
-                                className="text-[10px] font-bold px-1.5 py-0.5 rounded-r-full bg-white border-l shadow-sm text-gray-600 hover:text-blue-600 h-6 mr-1"
+                                className="text-[10px] font-bold px-1 py-0.5 rounded bg-white border shadow-sm text-gray-600 hover:text-blue-600 ml-1 h-5"
                             >
                                 {exportMode}
                             </button>
@@ -1996,7 +1994,7 @@ function App() {
                         <button
                             onClick={() => setShowCapturedInExport(!showCapturedInExport)}
                             title={`Show Captured Stones in Export: ${showCapturedInExport ? 'ON' : 'OFF'}`}
-                            className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors ${showCapturedInExport ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                            className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold transition-all text-base ${showCapturedInExport ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
                         >
                             👻
                         </button>
@@ -2004,7 +2002,7 @@ function App() {
                         <button
                             onClick={() => setShowNumbers(!showNumbers)}
                             title={`Toggle Numbers: ${showNumbers ? 'ON' : 'OFF'}`}
-                            className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors ${showNumbers ? 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+                            className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold transition-all text-base ${showNumbers ? 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
                         >
                             ⑧
                         </button>
@@ -2013,21 +2011,21 @@ function App() {
 
 
 
-                        <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                        <div className="w-px h-5 bg-gray-300 mx-0.5"></div>
 
 
                         {/* Pass Button */}
                         <button onClick={handlePass} disabled={mode !== 'NUMBERED'} title="Pass"
-                            className="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 font-bold flex items-center justify-center h-8 ml-1 text-lg">
+                            className="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 font-bold flex items-center justify-center h-7 ml-0.5 text-base">
                             ✋
                         </button>
 
-                        <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                        <div className="w-px h-5 bg-gray-300 mx-0.5"></div>
 
                         {/* Open in New Tab */}
                         <button
                             onClick={() => window.open('index.html', '_blank')}
-                            className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center font-bold text-xs"
+                            className="w-7 h-7 rounded-lg bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center font-bold text-xs transition-all"
                             title="Open in New Tab (Maximize)"
                         >
                             ↗
@@ -2036,7 +2034,7 @@ function App() {
                         {/* Help Button */}
                         <button
                             onClick={() => setShowHelp(true)}
-                            className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center font-bold text-xs"
+                            className="w-7 h-7 rounded-lg bg-gray-200 text-gray-600 hover:bg-gray-300 flex items-center justify-center font-bold text-xs transition-all"
                             title="Help"
                         >
                             ?
