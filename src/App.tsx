@@ -2379,7 +2379,7 @@ function App() {
 
                 {/* Mode A: Current Board */}
                 {(!printSettings || printSettings.pagingType === 'CURRENT') && (
-                    <div className="flex flex-col items-center w-full h-screen pt-12 print:pt-0">
+                    <div className="flex flex-col items-center w-full min-h-screen pt-12 print:pt-0">
                         {/* Header Area */}
                         <div className="w-full mb-4 text-center">
                             <h1 className="text-2xl font-bold mb-1">{formatPrintString(printSettings?.title || '%GN%')}</h1>
