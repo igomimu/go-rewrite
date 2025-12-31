@@ -127,7 +127,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
 
     const starPoints = getStarPoints(boardSize);
 
-    const viewBox = useMemo(() => {
+    const viewBoxData = useMemo(() => {
         const { minX, maxX, minY, maxY } = effectiveViewRange;
 
         // Ensure range is within bounds (if switching sizes happened)
@@ -141,7 +141,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
             // Reset to full
             const w = boardSize * CELL_SIZE;
             const h = boardSize * CELL_SIZE;
-            return `${MARGIN - CELL_SIZE / 2} ${MARGIN - CELL_SIZE / 2} ${w} ${h}`;
+            return { x: MARGIN - CELL_SIZE / 2, y: MARGIN - CELL_SIZE / 2, w, h, str: `${MARGIN - CELL_SIZE / 2} ${MARGIN - CELL_SIZE / 2} ${w} ${h}` };
         }
 
         const x = MARGIN + (validMinX - 1) * CELL_SIZE - CELL_SIZE / 2;
@@ -170,7 +170,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
             finalH += footerHeight + footerSpacing + footerPadding;
         }
 
-        return `${finalX} ${finalY} ${finalW} ${finalH}`;
+        return { x: finalX, y: finalY, w: finalW, h: finalH, str: `${finalX} ${finalY} ${finalW} ${finalH}` };
     }, [viewRange, showCoordinates, boardSize, hiddenMoves]);
 
     // Generate lines
@@ -423,7 +423,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
             ref={ref}
             width="100%"
             height="100%"
-            viewBox={viewBox}
+            viewBox={viewBoxData.str}
             xmlns="http://www.w3.org/2000/svg"
             className="select-none"
             preserveAspectRatio="xMidYMid meet"
@@ -432,17 +432,24 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
             onWheel={(e) => onBoardWheel(e.deltaY)}
             style={{
                 display: 'block',
-                aspectRatio: viewBox.split(' ')[2] + ' / ' + viewBox.split(' ')[3],
+                aspectRatio: viewBoxData.str.split(' ')[2] + ' / ' + viewBoxData.str.split(' ')[3],
                 printColorAdjust: 'exact',
-                WebkitPrintColorAdjust: 'exact',
-                backgroundColor: isMonochrome ? 'white' : '#DCB35C'
+                WebkitPrintColorAdjust: 'exact'
             }}
         >
             <defs>
             </defs>
 
-            {lines}
-            {coords}
+            {/* Background Rect for Printing robustness */}
+            <rect
+                x={viewBoxData.x}
+                y={viewBoxData.y}
+                width={viewBoxData.w}
+                height={viewBoxData.h}
+                fill={isMonochrome ? 'white' : '#DCB35C'}
+                stroke="none"
+            />
+
 
             {starPoints.map(([sx, sy]) => (
                 <circle
