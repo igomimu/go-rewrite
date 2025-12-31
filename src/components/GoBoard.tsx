@@ -425,7 +425,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
             height="100%"
             viewBox={viewBox}
             xmlns="http://www.w3.org/2000/svg"
-            className={`select-none ${isMonochrome ? 'bg-white' : 'bg-[#DCB35C]'}`}
+            className="select-none"
             preserveAspectRatio="xMidYMid meet"
             onMouseUp={onDragEnd}
             onMouseLeave={onDragEnd}
@@ -434,7 +434,8 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                 display: 'block',
                 aspectRatio: viewBox.split(' ')[2] + ' / ' + viewBox.split(' ')[3],
                 printColorAdjust: 'exact',
-                WebkitPrintColorAdjust: 'exact'
+                WebkitPrintColorAdjust: 'exact',
+                backgroundColor: isMonochrome ? 'white' : '#DCB35C'
             }}
         >
             <defs>
