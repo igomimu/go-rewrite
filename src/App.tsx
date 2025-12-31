@@ -2405,7 +2405,7 @@ function App() {
                                 onDragStart={() => { }}
                                 onDragMove={() => { }}
                                 selectionStart={null}
-                                isMonochrome={isMonochrome}
+                                isMonochrome={printSettings?.colorMode === 'MONOCHROME'}
                             />
                         </div>
 
@@ -2480,7 +2480,7 @@ function App() {
                                                         onDragStart={() => { }}
                                                         onDragMove={() => { }}
                                                         selectionStart={null}
-                                                        isMonochrome={isMonochrome}
+                                                        isMonochrome={printSettings?.colorMode === 'MONOCHROME'}
                                                     />
                                                 </div>
 

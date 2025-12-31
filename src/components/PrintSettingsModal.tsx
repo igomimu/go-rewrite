@@ -11,6 +11,7 @@ export interface PrintSettings {
     subTitle: string;
     header: string;
     footer: string;
+    colorMode: 'COLOR' | 'MONOCHROME';
 }
 
 interface PrintSettingsModalProps {
@@ -30,7 +31,8 @@ const DEFAULT_SETTINGS: PrintSettings = {
     title: '%GN% %PW% %WR%(W) vs %PB% %BR%(B)',
     subTitle: '%DT% %PC% %RE%',
     header: '%GN% %PW% %WR%(W) vs %PB% %BR%(B) Page %PAGE%',
-    footer: ''
+    footer: '',
+    colorMode: 'COLOR'
 };
 
 const PrintSettingsModal: React.FC<PrintSettingsModalProps> = ({ isOpen, onClose, onPrint, initialSettings }) => {
@@ -142,6 +144,23 @@ const PrintSettingsModal: React.FC<PrintSettingsModalProps> = ({ isOpen, onClose
                                 onClick={() => setSettings(DEFAULT_SETTINGS)}>
                                 デフォルトに戻す
                             </button>
+                        </div>
+                    </div>
+
+                    {/* Color Mode */}
+                    <div className="border border-gray-300 rounded p-2 bg-gray-50 relative pt-3">
+                        <span className="absolute -top-2.5 left-2 bg-gray-50 px-1 text-xs text-black">カラー設定</span>
+                        <div className="flex gap-4">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="colorMode" checked={settings.colorMode === 'COLOR'}
+                                    onChange={() => handleChange('colorMode', 'COLOR')} />
+                                <span>カラー</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="colorMode" checked={settings.colorMode === 'MONOCHROME'}
+                                    onChange={() => handleChange('colorMode', 'MONOCHROME')} />
+                                <span>モノクロ</span>
+                            </label>
                         </div>
                     </div>
                 </div>
