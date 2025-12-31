@@ -432,7 +432,9 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
             onWheel={(e) => onBoardWheel(e.deltaY)}
             style={{
                 display: 'block',
-                aspectRatio: viewBox.split(' ')[2] + ' / ' + viewBox.split(' ')[3]
+                aspectRatio: viewBox.split(' ')[2] + ' / ' + viewBox.split(' ')[3],
+                printColorAdjust: 'exact',
+                WebkitPrintColorAdjust: 'exact'
             }}
         >
             <defs>
