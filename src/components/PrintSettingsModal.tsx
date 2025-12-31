@@ -28,9 +28,9 @@ const DEFAULT_SETTINGS: PrintSettings = {
     showMoveNumber: true,
     showCoordinate: false,
     figuresPerPage: 4,
-    title: '%GN% %PW% %WR%(W) vs %PB% %BR%(B)',
+    title: '%GN% %PW% %WR% vs %PB% %BR%',
     subTitle: '%DT% %PC% %RE%',
-    header: '%GN% %PW% %WR%(W) vs %PB% %BR%(B) Page %PAGE%',
+    header: '%GN% %PW% %WR% vs %PB% %BR% Page %PAGE%',
     footer: '',
     colorMode: 'COLOR'
 };

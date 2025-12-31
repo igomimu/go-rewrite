@@ -448,6 +448,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                 height={viewBoxData.h}
                 fill={isMonochrome ? 'white' : '#DCB35C'}
                 stroke="none"
+                style={{ printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact' }}
             />
 
 
