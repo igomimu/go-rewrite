@@ -1270,40 +1270,14 @@ function App() {
         await new Promise(r => setTimeout(r, 50));
 
         try {
-            // Auto-crop to all stones
-            const { hasStones, minX, maxX, minY, maxY } = getBounds();
+            // Default to full board export (User Request: No auto-crop)
             const restored = showCapturedInExport ? getRestoredStones() : [];
-            let finalMinX = minX, finalMaxX = maxX, finalMinY = minY, finalMaxY = maxY, finalHasStones = hasStones;
+            const finalMinX = 1;
+            const finalMaxX = boardSize;
+            const finalMinY = 1;
+            const finalMaxY = boardSize;
 
-            if (restored.length > 0) {
-                finalHasStones = true;
-                restored.forEach(s => {
-                    if (s.x < finalMinX) finalMinX = s.x;
-                    if (s.x > finalMaxX) finalMaxX = s.x;
-                    if (s.y < finalMinY) finalMinY = s.y;
-                    if (s.y > finalMaxY) finalMaxY = s.y;
-                });
-            }
-
-            if (finalMinX === Infinity) { finalMinX = 1; finalMaxX = boardSize; finalMinY = 1; finalMaxY = boardSize; }
-
-            const performExportAction = async (element: SVGSVGElement) => {
-                if (isSvg) {
-                    await exportToSvg(element, isMonochrome ? '#FFFFFF' : '#DCB35C');
-                } else {
-                    await exportToPng(element, { scale: 3, backgroundColor: isMonochrome ? '#FFFFFF' : '#DCB35C', destination, filename });
-                }
-            };
-
-            if (finalHasStones) {
-                // Pass wrapper to performExport? No, performExport handles the restricted view render.
-                // We need to pass the mode to performExport or handle logic there.
-                // Refactor: performExport takes callback? 
-
-                await performExport({ minX: finalMinX, maxX: finalMaxX, minY: finalMinY, maxY: finalMaxY }, restored, { isSvg, destination, filename });
-            } else {
-                if (svgRef.current) await performExportAction(svgRef.current);
-            }
+            await performExport({ minX: finalMinX, maxX: finalMaxX, minY: finalMinY, maxY: finalMaxY }, restored, { isSvg, destination, filename });
         } finally {
             // Revert to Operation Mode (Number 11)
             setIsFigureMode(false);
