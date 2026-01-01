@@ -2085,11 +2085,14 @@ function App() {
                 )}
 
                 {/* Print Settings Modal */}
-                <PrintSettingsModal
-                    isOpen={showPrintModal}
-                    onClose={() => setShowPrintModal(false)}
-                    onPrint={handlePrintRequest}
-                />
+                {/* Print Settings Modal */}
+                {showPrintModal && (
+                    <PrintSettingsModal
+                        isOpen={true}
+                        onClose={() => setShowPrintModal(false)}
+                        onPrint={handlePrintRequest}
+                    />
+                )}
 
                 {/* Actual Print Content Removed (Moved Outside) */}
 
