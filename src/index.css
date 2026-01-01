@@ -15,13 +15,10 @@ body {
 @media print {
 
     /* Reset background colors for printing to save ink and look cleaner */
-    body,
-    .min-h-screen,
-    .bg-gray-100 {
-        background-color: white !important;
-        min-height: auto !important;
-        height: auto !important;
-        padding: 0 !important;
+    /* REMOVED force white background to allow color printing if user desires */
+    body {
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
     }
 
     /* Ensure the board is visible and centered */
@@ -36,16 +33,17 @@ body {
         align-items: center !important;
     }
 
-    /* Maximize SVG size */
+    /* Maximize SVG size for print, but respect aspect ratio */
     svg {
-        width: 100% !important;
-        height: auto !important;
-        max-height: 100vh !important;
+        display: block;
+        max-width: 100%;
+        height: auto;
     }
 }
+
 @media print {
-  .page-break {
-    page-break-after: always;
-    break-after: page;
-  }
+    .page-break {
+        page-break-after: always;
+        break-after: page;
+    }
 }

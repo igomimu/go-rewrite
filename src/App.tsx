@@ -1273,28 +1273,31 @@ function App() {
         const isSvg = modeToUse === 'SVG';
         const filename = `go_board_${new Date().toISOString().slice(0, 10)}.png`;
 
-        const boardEl = svgRef.current;
-        if (!boardEl) return;
+        if (!svgRef.current) return;
+
+        // Forced Full Board Export Logic
+        const fullBounds = {
+            minX: 1,
+            maxX: boardSize,
+            minY: 1,
+            maxY: boardSize
+        };
 
         // Auto-Enable Figure Mode (Show Label A) for Export
         setIsFigureMode(true);
-        // Wait for React Render
-        await new Promise(r => setTimeout(r, 50));
+        // Wait for React Render (Important for visual updates like Labels)
+        await new Promise(r => setTimeout(r, 100));
 
         try {
-            // Default to full board export (User Request: No auto-crop)
             const restored = showCapturedInExport ? getRestoredStones() : [];
-            const finalMinX = 1;
-            const finalMaxX = boardSize;
-            const finalMinY = 1;
-            const finalMaxY = boardSize;
-
-            await performExport({ minX: finalMinX, maxX: finalMaxX, minY: finalMinY, maxY: finalMaxY }, restored, { isSvg, destination, filename });
+            await performExport(fullBounds, restored, { isSvg, destination, filename });
+        } catch (err) {
+            console.error("Export Error:", err);
         } finally {
-            // Revert to Operation Mode (Number 11)
+            // Revert to Operation Mode
             setIsFigureMode(false);
         }
-    }, [isMonochrome, getRestoredStones, boardSize, showCapturedInExport, performExport]);
+    }, [boardSize, exportMode, showCapturedInExport, getRestoredStones, performExport]);
 
     const handleExportSelection = useCallback(async () => {
         if (!selectionStart || !selectionEnd) return;
@@ -1887,7 +1890,7 @@ function App() {
                 {/* Print Area Removed (Moved Outside) */}
                 <div className="flex justify-between w-full items-center mb-2">
                     <div className="flex items-baseline gap-2">
-                        <span className="text-[10px] text-gray-400 font-normal pl-1">v35.0</span>
+                        <span className="text-[10px] text-gray-400 font-normal pl-1">v36.0</span>
                     </div>
                     <div className="flex gap-2 items-center">
 

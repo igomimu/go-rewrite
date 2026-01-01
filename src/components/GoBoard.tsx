@@ -421,8 +421,6 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
     return (
         <svg
             ref={ref}
-            width="100%"
-            height="100%"
             viewBox={viewBoxData.str}
             xmlns="http://www.w3.org/2000/svg"
             className="select-none"
@@ -451,6 +449,9 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                 style={{ printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact' }}
             />
 
+            {lines}
+
+            {coords}
 
             {starPoints.map(([sx, sy]) => (
                 <circle

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 
 export interface PrintSettings {
@@ -14,13 +15,6 @@ export interface PrintSettings {
     colorMode: 'COLOR' | 'MONOCHROME';
 }
 
-interface PrintSettingsModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    onPrint: (settings: PrintSettings) => void;
-    initialSettings?: Partial<PrintSettings>;
-}
-
 const DEFAULT_SETTINGS: PrintSettings = {
     pagingType: 'CURRENT',
     movesPerFigure: 50,
@@ -28,12 +22,21 @@ const DEFAULT_SETTINGS: PrintSettings = {
     showMoveNumber: true,
     showCoordinate: false,
     figuresPerPage: 4,
-    title: '%GN% %PW% %WR% vs %PB% %BR%',
+    title: '%GN%',
     subTitle: '%DT% %PC% %RE%',
-    header: '%GN% %PW% %WR% vs %PB% %BR% Page %PAGE%',
+    header: '%GN% Page %PAGE%',
     footer: '',
     colorMode: 'COLOR'
 };
+
+interface PrintSettingsModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onPrint: (settings: PrintSettings) => void;
+    initialSettings?: Partial<PrintSettings>;
+}
+
+
 
 const PrintSettingsModal: React.FC<PrintSettingsModalProps> = ({ isOpen, onClose, onPrint, initialSettings }) => {
     const [settings, setSettings] = useState<PrintSettings>(DEFAULT_SETTINGS);
