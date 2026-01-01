@@ -1047,11 +1047,23 @@ function App() {
             }
         }
 
+        // Adjust for Coordinates (Match GoBoard logic)
+        let finalX = x;
+        let finalY = y;
+        let finalW = width;
+        let finalH = height;
+
+        if (showCoordinates) {
+            finalX -= 25;
+            finalY -= 25;
+            finalW += 50;
+            finalH += 50;
+        }
 
         // No width extension needed as we wrap content.
-        clone.setAttribute('viewBox', `${x} ${y} ${width} ${height}`);
-        clone.setAttribute('width', `${width}`);
-        clone.setAttribute('height', `${height}`);
+        clone.setAttribute('viewBox', `${finalX} ${finalY} ${finalW} ${finalH}`);
+        clone.setAttribute('width', `${finalW}`);
+        clone.setAttribute('height', `${finalH}`);
 
         const bgColor = isMonochrome ? '#FFFFFF' : '#DCB35C';
         if (isSvg) {
