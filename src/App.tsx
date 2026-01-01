@@ -1294,7 +1294,7 @@ function App() {
             // Revert to Operation Mode (Number 11)
             setIsFigureMode(false);
         }
-    }, [getBounds, isMonochrome, getRestoredStones, boardSize, showCapturedInExport, performExport]);
+    }, [isMonochrome, getRestoredStones, boardSize, showCapturedInExport, performExport]);
 
     const handleExportSelection = useCallback(async () => {
         if (!selectionStart || !selectionEnd) return;
