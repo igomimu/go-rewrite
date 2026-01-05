@@ -126,13 +126,15 @@ async function svgToPngBlob(svgElement: SVGSVGElement, width: number, height: nu
  * Exports an SVG element to the system clipboard as SVG text.
  * Matches PNG behavior (Copy instead of Download).
  */
-export async function exportToSvg(svgElement: SVGSVGElement, backgroundColor = '#DCB35C'): Promise<void> {
+export async function exportToSvg(svgElement: SVGSVGElement, options: { backgroundColor?: string, destination?: 'CLIPBOARD' | 'DOWNLOAD', filename?: string } = {}): Promise<void> {
+    const { backgroundColor = '#DCB35C', destination = 'CLIPBOARD', filename = 'go_board.svg' } = options;
     const clone = svgElement.cloneNode(true) as SVGSVGElement;
 
     // Remove "data-export-ignore" elements
     const ignoredElements = clone.querySelectorAll('[data-export-ignore="true"]');
     ignoredElements.forEach(el => el.remove());
 
+    // 3. Get the crop aspect ratio / dimensions from viewBox
     let width, height;
     if (clone.getAttribute('viewBox')) {
         const vb = clone.getAttribute('viewBox')!.split(' ').map(Number);
@@ -145,15 +147,29 @@ export async function exportToSvg(svgElement: SVGSVGElement, backgroundColor = '
         clone.setAttribute('viewBox', `0 0 ${width} ${height}`);
     }
 
+    // 4. FORCE Width/Height Attributes to match viewBox (Pixels)
     clone.setAttribute('width', `${width}px`);
     clone.setAttribute('height', `${height}px`);
 
-    // Set background color
+    // 5. Set background color
     clone.style.backgroundColor = backgroundColor;
 
-    // Serialize
+    // 6. Serialize
     const serializer = new XMLSerializer();
     const svgString = serializer.serializeToString(clone);
+
+    if (destination === 'DOWNLOAD') {
+        const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(svgBlob);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+        console.log('SVG downloaded successfully.');
+        return;
+    }
 
     // Copy to Clipboard (Hybrid: SVG Image + Text + PNG Fallback)
     try {

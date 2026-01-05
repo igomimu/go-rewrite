@@ -47,6 +47,7 @@ interface PrintSettingsModalProps {
 
 const PrintSettingsModal: React.FC<PrintSettingsModalProps> = ({ isOpen, onClose, onPrint, initialSettings }) => {
     const [settings, setSettings] = useState<PrintSettings>(DEFAULT_SETTINGS);
+    const [lastFocusedInput, setLastFocusedInput] = useState<keyof Pick<PrintSettings, 'title' | 'subTitle' | 'header' | 'footer'>>('title');
 
     useEffect(() => {
         if (isOpen) {
@@ -74,6 +75,13 @@ const PrintSettingsModal: React.FC<PrintSettingsModalProps> = ({ isOpen, onClose
     const handlePrint = () => {
         localStorage.setItem('gorw_print_settings', JSON.stringify(settings));
         onPrint(settings);
+    };
+
+    const insertVariable = (variable: string) => {
+        setSettings(prev => ({
+            ...prev,
+            [lastFocusedInput]: (prev[lastFocusedInput] || '') + variable
+        }));
     };
 
     return (
@@ -151,46 +159,61 @@ const PrintSettingsModal: React.FC<PrintSettingsModalProps> = ({ isOpen, onClose
                             <div className="grid grid-cols-[auto_1fr_auto] gap-2 items-center">
                                 <label className="w-14">タイトル</label>
                                 <input
-                                    className="border border-gray-400 px-1 w-full"
+                                    className={`border px-1 w-full outline-none transition-all ${lastFocusedInput === 'title' ? 'border-blue-500 ring-2 ring-blue-500' : 'border-gray-400 focus:border-blue-400'}`}
                                     value={settings.title}
                                     onChange={e => handleChange('title', e.target.value)}
+                                    onFocus={() => setLastFocusedInput('title')}
                                     disabled={!settings.showTitle}
                                 />
                                 <input type="checkbox" checked={settings.showTitle} onChange={e => handleChange('showTitle', e.target.checked)} title="表示/非表示" />
                             </div>
+
                             <div className="grid grid-cols-[auto_1fr_auto] gap-2 items-center">
                                 <label className="w-14">副題</label>
                                 <input
-                                    className="border border-gray-400 px-1 w-full"
+                                    className={`border px-1 w-full outline-none transition-all ${lastFocusedInput === 'subTitle' ? 'border-blue-500 ring-2 ring-blue-500' : 'border-gray-400 focus:border-blue-400'}`}
                                     value={settings.subTitle}
                                     onChange={e => handleChange('subTitle', e.target.value)}
+                                    onFocus={() => setLastFocusedInput('subTitle')}
                                     disabled={!settings.showSubTitle}
                                 />
                                 <input type="checkbox" checked={settings.showSubTitle} onChange={e => handleChange('showSubTitle', e.target.checked)} title="表示/非表示" />
                             </div>
 
+                            {/* Variable Insertion Help */}
                             <div className="border border-gray-300 rounded p-1.5 bg-gray-50 text-[10px] text-gray-500 leading-tight">
-                                <div className="mb-0.5 font-bold">使用可能な変数:</div>
-                                <div className="grid grid-cols-2 gap-x-2">
-                                    <span>%GN%:名称</span> <span>%DT%:日付</span>
-                                    <span>%PC%:場所</span> <span>%PB%:黒番</span>
-                                    <span>%PW%:白番</span> <span>%PBL%/%PWL%:手番付名前</span>
-                                    <span>%BR%/%WR%:段位</span> <span>%RE%:結果</span>
-                                    <span>%KM%:コミ</span> <span>%KML%:コミ(ラベル付)</span>
-                                    <span>%TM%:時間</span> <span>%PAGE%:ページ番号</span>
+                                <div className="mb-1 font-bold flex justify-between">
+                                    <span>変数を挿入 (クリック): {lastFocusedInput === 'title' ? 'タイトル' : lastFocusedInput === 'subTitle' ? '副題' : lastFocusedInput === 'header' ? 'ヘッダー' : 'フッター'}へ</span>
+                                    <button onClick={() => setSettings(prev => ({ ...prev, [lastFocusedInput]: '' }))} className="text-red-500 hover:underline">クリア</button>
+                                </div>
+                                <div className="grid grid-cols-4 gap-1">
+                                    {[
+                                        { l: '名前', v: '%GN%' }, { l: '日付', v: '%DT%' }, { l: '場所', v: '%PC%' }, { l: '結果', v: '%RE%' },
+                                        { l: '黒番', v: '%PB%' }, { l: '黒(名)', v: '%PBL%' }, { l: '黒段', v: '%BR%' }, { l: 'コミ', v: '%KM%' },
+                                        { l: '白番', v: '%PW%' }, { l: '白(名)', v: '%PWL%' }, { l: '白段', v: '%WR%' }, { l: 'コミL', v: '%KML%' },
+                                        { l: '時間', v: '%TM%' }, { l: '頁', v: '%PAGE%' }
+                                    ].map(item => (
+                                        <button key={item.v} onClick={() => insertVariable(item.v)}
+                                            className="bg-white border rounded px-1 hover:bg-gray-200 text-center shadow-sm active:bg-blue-100 transition-colors"
+                                            title={item.l}>
+                                            {item.v}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-[auto_1fr_auto] gap-2 items-center">
                                 <label className="w-14">ヘッダー</label>
                                 <input
-                                    className="border border-gray-400 px-1 w-full"
+                                    className={`border px-1 w-full outline-none transition-all ${lastFocusedInput === 'header' ? 'border-blue-500 ring-2 ring-blue-500' : 'border-gray-400 focus:border-blue-400'}`}
                                     value={settings.header}
                                     onChange={e => handleChange('header', e.target.value)}
+                                    onFocus={() => setLastFocusedInput('header')}
                                     disabled={!settings.showHeader}
                                 />
                                 <input type="checkbox" checked={settings.showHeader} onChange={e => handleChange('showHeader', e.target.checked)} title="表示/非表示" />
                             </div>
+
                             {/* Header Frequency */}
                             <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
                                 <label className="w-14">表示</label>
@@ -208,9 +231,10 @@ const PrintSettingsModal: React.FC<PrintSettingsModalProps> = ({ isOpen, onClose
                             <div className="grid grid-cols-[auto_1fr_auto] gap-2 items-center">
                                 <label className="w-14">フッター</label>
                                 <input
-                                    className="border border-gray-400 px-1 w-full"
+                                    className={`border px-1 w-full outline-none transition-all ${lastFocusedInput === 'footer' ? 'border-blue-500 ring-2 ring-blue-500' : 'border-gray-400 focus:border-blue-400'}`}
                                     value={settings.footer}
                                     onChange={e => handleChange('footer', e.target.value)}
+                                    onFocus={() => setLastFocusedInput('footer')}
                                     disabled={!settings.showFooter}
                                 />
                                 <input type="checkbox" checked={settings.showFooter} onChange={e => handleChange('showFooter', e.target.checked)} title="表示/非表示" />

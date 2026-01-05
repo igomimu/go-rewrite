@@ -445,6 +445,8 @@ function App() {
 
     const stepBack = () => { if (currentMoveIndex > 0) setCurrentMoveIndex(i => i - 1); };
     const stepForward = () => { if (currentMoveIndex < history.length - 1) setCurrentMoveIndex(i => i + 1); };
+    const stepBack10 = () => { setCurrentMoveIndex(i => Math.max(0, i - 10)); };
+    const stepForward10 = () => { setCurrentMoveIndex(i => Math.min(history.length - 1, i + 10)); };
     const stepFirst = () => setCurrentMoveIndex(0);
     const stepLast = () => setCurrentMoveIndex(history.length - 1);
 
@@ -1067,7 +1069,7 @@ function App() {
 
         const bgColor = isMonochrome ? '#FFFFFF' : '#DCB35C';
         if (isSvg) {
-            await exportToSvg(clone, bgColor);
+            await exportToSvg(clone, { backgroundColor: bgColor, destination: destination, filename: filename });
         } else {
             await exportToPng(clone, { scale: 3, backgroundColor: bgColor, destination: destination, filename });
         }
@@ -1331,7 +1333,8 @@ function App() {
     const handleExport = useCallback(async (forcedMode?: 'SVG' | 'PNG', destination?: 'CLIPBOARD' | 'DOWNLOAD') => {
         const modeToUse = forcedMode || exportMode;
         const isSvg = modeToUse === 'SVG';
-        const filename = `go_board_${new Date().toISOString().slice(0, 10)}.png`;
+        const ext = isSvg ? 'svg' : 'png';
+        const filename = `go_board_${new Date().toISOString().slice(0, 10)}.${ext}`;
 
         if (!svgRef.current) return;
 
@@ -1776,6 +1779,20 @@ function App() {
         setCurrentMoveIndex(0);
     };
 
+    const handlePasteSGF = async () => {
+        try {
+            const text = await navigator.clipboard.readText();
+            if (text && (text.includes('(;') || text.includes('GM['))) {
+                loadSGF(text);
+            } else {
+                alert('クリップボードに有効なSGFデータがありません。');
+            }
+        } catch (err) {
+            console.error('Failed to read clipboard', err);
+            alert('クリップボードの読み込みに失敗しました。');
+        }
+    };
+
     // Keyboard Shortcuts
     useEffect(() => {
         const onKeyDown = async (e: KeyboardEvent) => {
@@ -1978,6 +1995,9 @@ function App() {
                             <button onClick={handleSaveSGF} title="Save As... (Ctrl+S)" className="w-6 h-6 rounded-md bg-white hover:bg-orange-50 text-orange-600 flex items-center justify-center font-bold transition-all shadow-sm">
                                 <img src="/icons/save_as_v2.png" alt="Save As" className="w-4 h-4 object-contain opacity-80" />
                             </button>
+                            <button onClick={handlePasteSGF} title="Paste SGF from Clipboard" className="w-6 h-6 rounded-md bg-white hover:bg-blue-50 text-blue-600 flex items-center justify-center font-bold transition-all text-sm shadow-sm">
+                                📋
+                            </button>
                         </div>
 
                         {/* Group 2: Edit (Undo/Redo) */}
@@ -1989,6 +2009,28 @@ function App() {
                             <button onClick={restoreMove} disabled={redoStack.length === 0} title="Restore Deleted Move (Ctrl+Y)"
                                 className="w-6 h-6 rounded-md bg-white hover:bg-blue-50 text-blue-700 disabled:opacity-50 disabled:bg-gray-50 flex items-center justify-center font-bold text-sm transition-all shadow-sm">
                                 ↻
+                            </button>
+                        </div>
+
+                        {/* Group 2.5: Navigation (MultiGo Style) */}
+                        <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
+                            <button onClick={stepFirst} disabled={currentMoveIndex === 0} title="First Move (Home)" className="w-6 h-6 rounded-md bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-xs shadow-sm">
+                                |&lt;
+                            </button>
+                            <button onClick={stepBack10} disabled={currentMoveIndex === 0} title="Back 10 Moves" className="w-6 h-6 rounded-md bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-xs shadow-sm">
+                                &lt;&lt;
+                            </button>
+                            <button onClick={stepBack} disabled={currentMoveIndex === 0} title="Back (Wheel Up)" className="w-6 h-6 rounded-md bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-sm shadow-sm">
+                                &lt;
+                            </button>
+                            <button onClick={stepForward} disabled={currentMoveIndex === history.length - 1} title="Forward (Wheel Down)" className="w-6 h-6 rounded-md bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-sm shadow-sm">
+                                &gt;
+                            </button>
+                            <button onClick={stepForward10} disabled={currentMoveIndex === history.length - 1} title="Forward 10 Moves" className="w-6 h-6 rounded-md bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-xs shadow-sm">
+                                &gt;&gt;
+                            </button>
+                            <button onClick={stepLast} disabled={currentMoveIndex === history.length - 1} title="Last Move (End)" className="w-6 h-6 rounded-md bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-xs shadow-sm">
+                                &gt;|
                             </button>
                         </div>
 
@@ -2056,14 +2098,14 @@ function App() {
                             <button
                                 onClick={() => window.open('index.html', '_blank')}
                                 className="w-6 h-6 rounded-md bg-gray-100 text-gray-500 hover:bg-gray-200 flex items-center justify-center font-bold text-[10px] transition-all"
-                                title="Open in New Tab (Maximize)"
+                                title="新しいタブで開く (最大化)"
                             >
                                 ↗
                             </button>
                             <button
                                 onClick={() => setShowHelp(true)}
                                 className="w-6 h-6 rounded-md bg-gray-100 text-gray-500 hover:bg-gray-200 flex items-center justify-center font-bold text-xs transition-all"
-                                title="Help"
+                                title="ヘルプ"
                             >
                                 ?
                             </button>
@@ -2081,53 +2123,53 @@ function App() {
                             >
                                 ×
                             </button>
-                            <h2 className="text-lg font-bold mb-4 text-gray-800 border-b pb-2">Shortcuts & Help</h2>
+                            <h2 className="text-lg font-bold mb-4 text-gray-800 border-b pb-2">ショートカット & ヘルプ</h2>
                             <div className="space-y-3 text-sm text-gray-700">
                                 <div className="flex items-center gap-3">
                                     <div className="w-6 text-center text-xl">🖱️</div>
                                     <div>
-                                        <div className="font-bold">Click / Right Click</div>
-                                        <div className="text-xs text-gray-500">Place Stone / Delete Stone</div>
+                                        <div className="font-bold">クリック / 右クリック</div>
+                                        <div className="text-xs text-gray-500">石を置く / 削除</div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <div className="w-6 text-center text-xl">🖱️</div>
                                     <div>
-                                        <div className="font-bold">Drag</div>
-                                        <div className="text-xs text-gray-500">Select Area (Crop) / Move Stone</div>
+                                        <div className="font-bold">ドラッグ</div>
+                                        <div className="text-xs text-gray-500">範囲選択 (切り抜き) / 石の移動</div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <div className="w-6 text-center text-xl">⚙️</div>
                                     <div>
-                                        <div className="font-bold">Wheel</div>
-                                        <div className="text-xs text-gray-500">Undo / Redo</div>
+                                        <div className="font-bold">ホイール</div>
+                                        <div className="text-xs text-gray-500">アンドゥ(戻る) / リドゥ(進む)</div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <div className="w-6 text-center text-xs font-mono border rounded bg-gray-100">Ctrl+F</div>
                                     <div>
-                                        <div className="font-bold">Copy Image</div>
-                                        <div className="text-xs text-gray-500">Save to Clipboard (High Res)</div>
+                                        <div className="font-bold">コピー</div>
+                                        <div className="text-xs text-gray-500">画像をクリップボードに保存</div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <div className="w-6 text-center text-xs font-mono border rounded bg-gray-100">Ctrl+V</div>
                                     <div>
-                                        <div className="font-bold">Paste SGF</div>
-                                        <div className="text-xs text-gray-500">Load SGF from Clipboard</div>
+                                        <div className="font-bold">SGF貼り付け</div>
+                                        <div className="text-xs text-gray-500">クリップボードから棋譜を読み込み</div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <div className="w-6 text-center text-xs font-mono border rounded bg-gray-100">Esc</div>
                                     <div>
-                                        <div className="font-bold">Cancel</div>
-                                        <div className="text-xs text-gray-500">Clear Selection / Close Help</div>
+                                        <div className="font-bold">キャンセル</div>
+                                        <div className="text-xs text-gray-500">選択解除 / ヘルプを閉じる</div>
                                     </div>
                                 </div>
                             </div>
                             <div className="mt-6 text-center text-xs text-gray-400">
-                                GORewrite v22
+                                GORewrite v36
                             </div>
                         </div>
                     </div>
