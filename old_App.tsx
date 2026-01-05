@@ -1047,23 +1047,11 @@ function App() {
             }
         }
 
-        // Adjust for Coordinates (Match GoBoard logic)
-        let finalX = x;
-        let finalY = y;
-        let finalW = width;
-        let finalH = height;
-
-        if (showCoordinates) {
-            finalX -= 25;
-            finalY -= 25;
-            finalW += 50;
-            finalH += 50;
-        }
 
         // No width extension needed as we wrap content.
-        clone.setAttribute('viewBox', `${finalX} ${finalY} ${finalW} ${finalH}`);
-        clone.setAttribute('width', `${finalW}`);
-        clone.setAttribute('height', `${finalH}`);
+        clone.setAttribute('viewBox', `${x} ${y} ${width} ${height}`);
+        clone.setAttribute('width', `${width}`);
+        clone.setAttribute('height', `${height}`);
 
         const bgColor = isMonochrome ? '#FFFFFF' : '#DCB35C';
         if (isSvg) {
@@ -1100,78 +1088,18 @@ function App() {
     const [printSettings, setPrintSettings] = useState<PrintSettings | null>(null);
 
     // Variable Substitution
-    // Variable Substitution
     const formatPrintString = (template: string, pageNum: number = 1) => {
         let s = template;
-
-        // Helper to format rank: 9d -> 九段, 1k -> 一級, 9p -> 九段 (remove p)
-        const formatRank = (r: string) => {
-            if (!r) return '';
-            let f = r.replace(/[pP]/g, ''); // Remove P
-
-            // Replace Number + Type (d/k)
-            f = f.replace(/(\d+)([dDkK])/g, (_, numStr, type) => {
-                const n = parseInt(numStr);
-                const isDan = /[dD]/.test(type);
-                const unit = isDan ? '段' : '級';
-
-                if (isNaN(n)) return numStr + unit;
-
-                // User Request: Kyu should remain Arabic numerals (e.g., 15級)
-                if (!isDan) return numStr + unit;
-
-                // Special case: 1 Dan -> 初段
-                if (isDan && n === 1) return '初' + unit;
-
-                const digits = ['〇', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
-                let kanjiNum = '';
-
-                if (n < 10) {
-                    kanjiNum = digits[n];
-                } else if (n < 20) {
-                    kanjiNum = '十' + (n % 10 === 0 ? '' : digits[n % 10]);
-                } else if (n < 100) {
-                    kanjiNum = digits[Math.floor(n / 10)] + '十' + (n % 10 === 0 ? '' : digits[n % 10]);
-                } else {
-                    kanjiNum = numStr; // Fallback for huge numbers
-                }
-
-                return kanjiNum + unit;
-            });
-
-            return f;
-        };
-
-        // Helper to format Komi: 6.5 -> 6目半
-        const formatKomi = (k: string) => {
-            if (!k) return '';
-            if (k.endsWith('.5')) {
-                return k.replace('.5', '目半');
-            }
-            return k + '目';
-        };
-
-        const bRankFormatted = formatRank(blackRank);
-        const wRankFormatted = formatRank(whiteRank);
-        const komiFormatted = formatKomi(komi);
-
-        const bRankStr = bRankFormatted ? ` ${bRankFormatted}` : '';
-        const wRankStr = wRankFormatted ? ` ${wRankFormatted}` : '';
-
         s = s.replace(/%GN%/g, gameName || gameEvent || '');
         s = s.replace(/%EV%/g, gameEvent || '');
         s = s.replace(/%DT%/g, gameDate || '');
         s = s.replace(/%PC%/g, gamePlace || '');
         s = s.replace(/%PB%/g, blackName || '黒番');
-        s = s.replace(/%PBL%/g, blackName ? `黒：${blackName}${bRankStr}` : '黒番');
-        s = s.replace(/%BR%/g, bRankFormatted);
+        s = s.replace(/%BR%/g, blackRank || '');
         s = s.replace(/%PW%/g, whiteName || '白番');
-        s = s.replace(/%PWL%/g, whiteName ? `白：${whiteName}${wRankStr}` : '白番');
-        s = s.replace(/%WR%/g, wRankFormatted);
+        s = s.replace(/%WR%/g, whiteRank || '');
         s = s.replace(/%RE%/g, gameResult || '');
-        s = s.replace(/%KM%/g, komiFormatted || '');
-        s = s.replace(/%KML%/g, komiFormatted ? `コミ：${komiFormatted}` : '');
-        s = s.replace(/%TM%/g, gameTime || '');
+        s = s.replace(/%KM%/g, komi || '');
         s = s.replace(/%PAGE%/g, pageNum.toString());
         return s;
     };
@@ -1333,31 +1261,54 @@ function App() {
         const isSvg = modeToUse === 'SVG';
         const filename = `go_board_${new Date().toISOString().slice(0, 10)}.png`;
 
-        if (!svgRef.current) return;
-
-        // Forced Full Board Export Logic
-        const fullBounds = {
-            minX: 1,
-            maxX: boardSize,
-            minY: 1,
-            maxY: boardSize
-        };
+        const boardEl = svgRef.current;
+        if (!boardEl) return;
 
         // Auto-Enable Figure Mode (Show Label A) for Export
         setIsFigureMode(true);
-        // Wait for React Render (Important for visual updates like Labels)
-        await new Promise(r => setTimeout(r, 100));
+        // Wait for React Render
+        await new Promise(r => setTimeout(r, 50));
 
         try {
+            // Auto-crop to all stones
+            const { hasStones, minX, maxX, minY, maxY } = getBounds();
             const restored = showCapturedInExport ? getRestoredStones() : [];
-            await performExport(fullBounds, restored, { isSvg, destination, filename });
-        } catch (err) {
-            console.error("Export Error:", err);
+            let finalMinX = minX, finalMaxX = maxX, finalMinY = minY, finalMaxY = maxY, finalHasStones = hasStones;
+
+            if (restored.length > 0) {
+                finalHasStones = true;
+                restored.forEach(s => {
+                    if (s.x < finalMinX) finalMinX = s.x;
+                    if (s.x > finalMaxX) finalMaxX = s.x;
+                    if (s.y < finalMinY) finalMinY = s.y;
+                    if (s.y > finalMaxY) finalMaxY = s.y;
+                });
+            }
+
+            if (finalMinX === Infinity) { finalMinX = 1; finalMaxX = boardSize; finalMinY = 1; finalMaxY = boardSize; }
+
+            const performExportAction = async (element: SVGSVGElement) => {
+                if (isSvg) {
+                    await exportToSvg(element, isMonochrome ? '#FFFFFF' : '#DCB35C');
+                } else {
+                    await exportToPng(element, { scale: 3, backgroundColor: isMonochrome ? '#FFFFFF' : '#DCB35C', destination, filename });
+                }
+            };
+
+            if (finalHasStones) {
+                // Pass wrapper to performExport? No, performExport handles the restricted view render.
+                // We need to pass the mode to performExport or handle logic there.
+                // Refactor: performExport takes callback? 
+
+                await performExport({ minX: finalMinX, maxX: finalMaxX, minY: finalMinY, maxY: finalMaxY }, restored, { isSvg, destination, filename });
+            } else {
+                if (svgRef.current) await performExportAction(svgRef.current);
+            }
         } finally {
-            // Revert to Operation Mode
+            // Revert to Operation Mode (Number 11)
             setIsFigureMode(false);
         }
-    }, [boardSize, exportMode, showCapturedInExport, getRestoredStones, performExport]);
+    }, [getBounds, isMonochrome, getRestoredStones, boardSize, showCapturedInExport, performExport]);
 
     const handleExportSelection = useCallback(async () => {
         if (!selectionStart || !selectionEnd) return;
@@ -1950,7 +1901,7 @@ function App() {
                 {/* Print Area Removed (Moved Outside) */}
                 <div className="flex justify-between w-full items-center mb-2">
                     <div className="flex items-baseline gap-2">
-                        <span className="text-[10px] text-gray-400 font-normal pl-1">v36.0</span>
+                        <span className="text-[10px] text-gray-400 font-normal pl-1">v35.0</span>
                     </div>
                     <div className="flex gap-2 items-center">
 
@@ -2134,14 +2085,11 @@ function App() {
                 )}
 
                 {/* Print Settings Modal */}
-                {/* Print Settings Modal */}
-                {showPrintModal && (
-                    <PrintSettingsModal
-                        isOpen={true}
-                        onClose={() => setShowPrintModal(false)}
-                        onPrint={handlePrintRequest}
-                    />
-                )}
+                <PrintSettingsModal
+                    isOpen={showPrintModal}
+                    onClose={() => setShowPrintModal(false)}
+                    onPrint={handlePrintRequest}
+                />
 
                 {/* Actual Print Content Removed (Moved Outside) */}
 
@@ -2152,7 +2100,7 @@ function App() {
                         className="flex items-center gap-1 text-sm bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded px-3 py-1 text-gray-700"
                     >
                         <span>ℹ️</span>
-                        <span>棋譜情報...</span>
+                        <span>Game Info...</span>
                     </button>
                 </div>
 
@@ -2431,20 +2379,14 @@ function App() {
 
                 {/* Mode A: Current Board */}
                 {(!printSettings || printSettings.pagingType === 'CURRENT') && (
-                    <div className="flex flex-col items-center w-full min-h-screen pt-12 print:pt-0">
+                    <div className="flex flex-col items-center w-full h-screen pt-12 print:pt-0">
                         {/* Header Area */}
                         <div className="w-full mb-4 text-center">
-                            {(printSettings?.showTitle !== false) && (
-                                <h1 className="text-2xl font-bold mb-1">{formatPrintString(printSettings?.title || '%GN%')}</h1>
-                            )}
-                            {(printSettings?.showSubTitle !== false) && (
-                                <h2 className="text-lg text-gray-600">{formatPrintString(printSettings?.subTitle || '%DT%')}</h2>
-                            )}
-                            {(printSettings?.showHeader !== false) && (
-                                <div className="text-right text-xs text-gray-500 mt-2 border-b border-gray-400">
-                                    {formatPrintString(printSettings?.header || '')}
-                                </div>
-                            )}
+                            <h1 className="text-2xl font-bold mb-1">{formatPrintString(printSettings?.title || '%GN%')}</h1>
+                            <h2 className="text-lg text-gray-600">{formatPrintString(printSettings?.subTitle || '%DT%')}</h2>
+                            <div className="text-right text-xs text-gray-500 mt-2 border-b border-gray-400">
+                                {formatPrintString(printSettings?.header || '')}
+                            </div>
                         </div>
 
                         {/* Board */}
@@ -2464,13 +2406,12 @@ function App() {
                                 onDragMove={() => { }}
                                 selectionStart={null}
                                 isMonochrome={printSettings?.colorMode === 'MONOCHROME'}
-                                readOnly={true}
                             />
                         </div>
 
                         {/* Footer */}
                         <div className="w-full text-center text-xs mt-auto pb-4">
-                            {(printSettings?.showFooter !== false) && formatPrintString(printSettings?.footer || '')}
+                            {formatPrintString(printSettings?.footer || '')}
                         </div>
                     </div>
                 )}
@@ -2504,62 +2445,54 @@ function App() {
                                 return { width: '95%', maxWidth: '400px' }; // Tight fit for 4-up
                             };
 
-                            return chunks.map((chunk, pageIdx) => {
-                                const showHeader = printSettings.headerFrequency === 'EVERY_PAGE' || pageIdx === 0;
+                            return chunks.map((chunk, pageIdx) => (
+                                <div key={pageIdx} className="page-break w-full min-h-screen p-4 box-border flex flex-col justify-center">
+                                    {/* Page Header (Optional, maybe specific to page?) */}
 
-                                return (
-                                    <div key={pageIdx} className="page-break w-full min-h-screen p-4 box-border flex flex-col justify-center">
-                                        {/* Page Header */}
-                                        {showHeader && (
-                                            <div className="w-full mb-4 text-center">
-                                                <h1 className="text-xl font-bold mb-1">{formatPrintString(printSettings.title, pageIdx + 1)}</h1>
-                                                {printSettings.subTitle && <h2 className="text-sm text-gray-600">{formatPrintString(printSettings.subTitle, pageIdx + 1)}</h2>}
-                                                <div className="text-right text-xs text-gray-500 mt-2 border-b border-gray-400">
-                                                    {formatPrintString(printSettings.header, pageIdx + 1)}
+                                    <div className={`${getGridClass(perPage)} w-full flex-grow`}>
+                                        {chunk.map((fig, i) => (
+                                            <div key={i} className="flex flex-col items-center w-full" style={getItemStyle(perPage)}>
+                                                {/* Header */}
+                                                <div className="w-full mb-1 text-center">
+                                                    <h1 className="text-lg font-bold truncate">{formatPrintString(printSettings.title, (pageIdx * perPage) + i + 1)}</h1>
+                                                    {/* <h2 className="text-xs text-gray-600 truncate">{formatPrintString(printSettings.subTitle, (pageIdx * perPage) + i + 1)}</h2> */}
+                                                    <div className="text-right text-[10px] text-gray-500 border-b border-gray-400">
+                                                        {formatPrintString(printSettings.header, (pageIdx * perPage) + i + 1)}
+                                                    </div>
+                                                </div>
+
+                                                {/* Figure Info */}
+                                                <div className="w-full text-center font-bold text-xs mb-1">
+                                                    Figure {(pageIdx * perPage) + i + 1} ({fig.moveRangeStart}-{fig.moveRangeEnd})
+                                                </div>
+
+                                                {/* Board */}
+                                                <div className="w-full aspect-square relative">
+                                                    <GoBoard
+                                                        boardState={fig.board}
+                                                        boardSize={boardSize}
+                                                        showCoordinates={printSettings.showCoordinate}
+                                                        onCellClick={() => { }}
+                                                        onCellRightClick={() => { }}
+                                                        onBoardWheel={() => { }}
+                                                        onCellMouseEnter={() => { }}
+                                                        onCellMouseLeave={() => { }}
+                                                        onDragStart={() => { }}
+                                                        onDragMove={() => { }}
+                                                        selectionStart={null}
+                                                        isMonochrome={printSettings?.colorMode === 'MONOCHROME'}
+                                                    />
+                                                </div>
+
+                                                {/* Footer */}
+                                                <div className="w-full text-center text-[10px] mt-1">
+                                                    {formatPrintString(printSettings.footer, (pageIdx * perPage) + i + 1)}
                                                 </div>
                                             </div>
-                                        )}
-
-                                        <div className={`${getGridClass(perPage)} w-full flex-grow`}>
-                                            {chunk.map((fig, i) => (
-                                                <div key={i} className="flex flex-col items-center w-full" style={getItemStyle(perPage)}>
-
-                                                    {/* Figure Info */}
-                                                    <div className="w-full text-center font-bold text-xs mb-1">
-                                                        第{(pageIdx * perPage) + i + 1}図 ({fig.moveRangeStart}-{fig.moveRangeEnd})
-                                                    </div>
-
-                                                    {/* Board */}
-                                                    <div className="w-full aspect-square relative">
-                                                        <GoBoard
-                                                            boardState={fig.board}
-                                                            boardSize={boardSize}
-                                                            showCoordinates={printSettings.showCoordinate}
-                                                            showNumbers={printSettings.showMoveNumber}
-                                                            markers={[]}
-                                                            onCellClick={() => { }}
-                                                            onCellRightClick={() => { }}
-                                                            onBoardWheel={() => { }}
-                                                            onCellMouseEnter={() => { }}
-                                                            onCellMouseLeave={() => { }}
-                                                            onDragStart={() => { }}
-                                                            onDragMove={() => { }}
-                                                            selectionStart={null}
-                                                            isMonochrome={printSettings?.colorMode === 'MONOCHROME'}
-                                                        />
-                                                    </div>
-
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        {/* Footer */}
-                                        <div className="w-full text-center text-[10px] mt-auto pb-4">
-                                            {formatPrintString(printSettings.footer, pageIdx + 1)}
-                                        </div>
+                                        ))}
                                     </div>
-                                );
-                            });
+                                </div>
+                            ));
                         })()}
                     </div>
                 )}

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 
 export interface PrintSettings {
@@ -9,13 +8,18 @@ export interface PrintSettings {
     showCoordinate: boolean;
     figuresPerPage: number;
     title: string;
+    showTitle: boolean;
     subTitle: string;
+    showSubTitle: boolean;
     header: string;
+    showHeader: boolean;
+    headerFrequency: 'EVERY_PAGE' | 'FIRST_PAGE_ONLY';
     footer: string;
+    showFooter: boolean;
     colorMode: 'COLOR' | 'MONOCHROME';
 }
 
-const DEFAULT_SETTINGS: PrintSettings = {
+export const DEFAULT_SETTINGS: PrintSettings = {
     pagingType: 'CURRENT',
     movesPerFigure: 50,
     showMarkers: false,
@@ -23,9 +27,14 @@ const DEFAULT_SETTINGS: PrintSettings = {
     showCoordinate: false,
     figuresPerPage: 4,
     title: '%GN%',
+    showTitle: true,
     subTitle: '%DT% %PC% %RE%',
+    showSubTitle: true,
     header: '%GN% Page %PAGE%',
+    showHeader: true,
+    headerFrequency: 'EVERY_PAGE',
     footer: '',
+    showFooter: true,
     colorMode: 'COLOR'
 };
 
@@ -33,28 +42,38 @@ interface PrintSettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
     onPrint: (settings: PrintSettings) => void;
-    initialSettings?: Partial<PrintSettings>;
+    initialSettings?: PrintSettings;
 }
-
-
 
 const PrintSettingsModal: React.FC<PrintSettingsModalProps> = ({ isOpen, onClose, onPrint, initialSettings }) => {
     const [settings, setSettings] = useState<PrintSettings>(DEFAULT_SETTINGS);
 
     useEffect(() => {
-        if (isOpen && initialSettings) {
-            setSettings(prev => ({ ...prev, ...initialSettings }));
+        if (isOpen) {
+            const saved = localStorage.getItem('gorw_print_settings');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    setSettings({ ...DEFAULT_SETTINGS, ...parsed });
+                } catch (e) {
+                    console.error('Failed to load print settings', e);
+                    setSettings(DEFAULT_SETTINGS);
+                }
+            } else if (initialSettings) {
+                setSettings({ ...DEFAULT_SETTINGS, ...initialSettings });
+            }
         }
     }, [isOpen, initialSettings]);
-
-    useEffect(() => {
-        console.log('PrintSettingsModal rendered, isOpen:', isOpen);
-    }, [isOpen]);
 
     if (!isOpen) return null;
 
     const handleChange = <K extends keyof PrintSettings>(key: K, value: PrintSettings[K]) => {
         setSettings(prev => ({ ...prev, [key]: value }));
+    };
+
+    const handlePrint = () => {
+        localStorage.setItem('gorw_print_settings', JSON.stringify(settings));
+        onPrint(settings);
     };
 
     return (
@@ -103,42 +122,98 @@ const PrintSettingsModal: React.FC<PrintSettingsModalProps> = ({ isOpen, onClose
                             <label className="flex items-center gap-2 cursor-pointer">
                                 <input type="checkbox" checked={settings.showMarkers}
                                     onChange={e => handleChange('showMarkers', e.target.checked)} />
-                                <span>マーカーを表示</span>
+                                <span className="text-xs">マーカーを表示</span>
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer">
                                 <input type="checkbox" checked={settings.showMoveNumber}
                                     onChange={e => handleChange('showMoveNumber', e.target.checked)} />
-                                <span>手数を表示</span>
+                                <span className="text-xs">手数を表示</span>
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer">
                                 <input type="checkbox" checked={settings.showCoordinate}
                                     onChange={e => handleChange('showCoordinate', e.target.checked)} />
-                                <span>座標を表示</span>
+                                <span className="text-xs">座標を表示</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={settings.colorMode === 'MONOCHROME'}
+                                    onChange={e => handleChange('colorMode', e.target.checked ? 'MONOCHROME' : 'COLOR')} />
+                                <span className="text-xs">白黒モード</span>
                             </label>
                         </div>
 
                         <div className="flex justify-between items-center mb-2">
-                            <span>1ページあたりの図数</span>
-                            <input type="number" className="w-16 border px-1 py-0.5"
+                            <span className="text-xs">図/ページ</span>
+                            <input type="number" className="w-12 border px-1 py-0.5 text-xs"
                                 value={settings.figuresPerPage} onChange={e => handleChange('figuresPerPage', parseInt(e.target.value) || 4)} />
                         </div>
 
-                        <div className="space-y-2">
-                            <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
-                                <label className="w-16">タイトル</label>
-                                <input className="border border-gray-400 px-1 w-full" value={settings.title} onChange={e => handleChange('title', e.target.value)} />
+                        <div className="space-y-2 text-xs">
+                            <div className="grid grid-cols-[auto_1fr_auto] gap-2 items-center">
+                                <label className="w-14">タイトル</label>
+                                <input
+                                    className="border border-gray-400 px-1 w-full"
+                                    value={settings.title}
+                                    onChange={e => handleChange('title', e.target.value)}
+                                    disabled={!settings.showTitle}
+                                />
+                                <input type="checkbox" checked={settings.showTitle} onChange={e => handleChange('showTitle', e.target.checked)} title="表示/非表示" />
                             </div>
-                            <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
-                                <label className="w-16">サブタイトル</label>
-                                <input className="border border-gray-400 px-1 w-full" value={settings.subTitle} onChange={e => handleChange('subTitle', e.target.value)} />
+                            <div className="grid grid-cols-[auto_1fr_auto] gap-2 items-center">
+                                <label className="w-14">副題</label>
+                                <input
+                                    className="border border-gray-400 px-1 w-full"
+                                    value={settings.subTitle}
+                                    onChange={e => handleChange('subTitle', e.target.value)}
+                                    disabled={!settings.showSubTitle}
+                                />
+                                <input type="checkbox" checked={settings.showSubTitle} onChange={e => handleChange('showSubTitle', e.target.checked)} title="表示/非表示" />
                             </div>
-                            <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
-                                <label className="w-16">ヘッダー</label>
-                                <input className="border border-gray-400 px-1 w-full" value={settings.header} onChange={e => handleChange('header', e.target.value)} />
+
+                            <div className="border border-gray-300 rounded p-1.5 bg-gray-50 text-[10px] text-gray-500 leading-tight">
+                                <div className="mb-0.5 font-bold">使用可能な変数:</div>
+                                <div className="grid grid-cols-2 gap-x-2">
+                                    <span>%GN%:名称</span> <span>%DT%:日付</span>
+                                    <span>%PC%:場所</span> <span>%PB%:黒番</span>
+                                    <span>%PW%:白番</span> <span>%PBL%/%PWL%:手番付名前</span>
+                                    <span>%BR%/%WR%:段位</span> <span>%RE%:結果</span>
+                                    <span>%KM%:コミ</span> <span>%KML%:コミ(ラベル付)</span>
+                                    <span>%TM%:時間</span> <span>%PAGE%:ページ番号</span>
+                                </div>
                             </div>
+
+                            <div className="grid grid-cols-[auto_1fr_auto] gap-2 items-center">
+                                <label className="w-14">ヘッダー</label>
+                                <input
+                                    className="border border-gray-400 px-1 w-full"
+                                    value={settings.header}
+                                    onChange={e => handleChange('header', e.target.value)}
+                                    disabled={!settings.showHeader}
+                                />
+                                <input type="checkbox" checked={settings.showHeader} onChange={e => handleChange('showHeader', e.target.checked)} title="表示/非表示" />
+                            </div>
+                            {/* Header Frequency */}
                             <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
-                                <label className="w-16">フッター</label>
-                                <input className="border border-gray-400 px-1 w-full" value={settings.footer} onChange={e => handleChange('footer', e.target.value)} />
+                                <label className="w-14">表示</label>
+                                <select
+                                    className="border border-gray-400 px-1 w-full"
+                                    value={settings.headerFrequency}
+                                    onChange={e => handleChange('headerFrequency', e.target.value as any)}
+                                    disabled={!settings.showHeader}
+                                >
+                                    <option value="EVERY_PAGE">全ページ</option>
+                                    <option value="FIRST_PAGE_ONLY">最初のページのみ</option>
+                                </select>
+                            </div>
+
+                            <div className="grid grid-cols-[auto_1fr_auto] gap-2 items-center">
+                                <label className="w-14">フッター</label>
+                                <input
+                                    className="border border-gray-400 px-1 w-full"
+                                    value={settings.footer}
+                                    onChange={e => handleChange('footer', e.target.value)}
+                                    disabled={!settings.showFooter}
+                                />
+                                <input type="checkbox" checked={settings.showFooter} onChange={e => handleChange('showFooter', e.target.checked)} title="表示/非表示" />
                             </div>
                         </div>
 
@@ -150,32 +225,15 @@ const PrintSettingsModal: React.FC<PrintSettingsModalProps> = ({ isOpen, onClose
                         </div>
                     </div>
 
-                    {/* Color Mode */}
-                    <div className="border border-gray-300 rounded p-2 bg-gray-50 relative pt-3">
-                        <span className="absolute -top-2.5 left-2 bg-gray-50 px-1 text-xs text-black">カラー設定</span>
-                        <div className="flex gap-4">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="colorMode" checked={settings.colorMode === 'COLOR'}
-                                    onChange={() => handleChange('colorMode', 'COLOR')} />
-                                <span>カラー</span>
-                            </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="radio" name="colorMode" checked={settings.colorMode === 'MONOCHROME'}
-                                    onChange={() => handleChange('colorMode', 'MONOCHROME')} />
-                                <span>モノクロ</span>
-                            </label>
-                        </div>
+                    {/* Footer Buttons */}
+                    <div className="p-3 border-t border-gray-300 bg-gray-200 rounded-b-lg flex justify-end gap-2">
+                        <button onClick={onClose} className="px-4 py-2 bg-white text-gray-700 rounded border border-gray-400 hover:bg-gray-50 shadow-sm">
+                            キャンセル
+                        </button>
+                        <button onClick={handlePrint} className="px-4 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 shadow-sm flex items-center gap-2">
+                            <span>🖨️</span> プレビュー
+                        </button>
                     </div>
-                </div>
-
-                {/* Footer Buttons */}
-                <div className="p-3 border-t border-gray-300 bg-gray-200 rounded-b-lg flex justify-end gap-2">
-                    <button onClick={() => onPrint(settings)} className="px-6 py-1.5 bg-white border border-blue-500 text-blue-600 rounded hover:bg-blue-50 shadow-sm w-24 font-bold">
-                        印刷
-                    </button>
-                    <button onClick={onClose} className="px-6 py-1.5 bg-white border border-gray-400 rounded hover:bg-gray-50 text-black shadow-sm w-24">
-                        キャンセル
-                    </button>
                 </div>
             </div>
         </div>

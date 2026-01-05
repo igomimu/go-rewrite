@@ -21,11 +21,11 @@ export async function exportToPng(svgElement: SVGSVGElement, options: { scale?: 
     // 1. Clone the SVG to manipulate it without affecting the DOM
     const clone = svgElement.cloneNode(true) as SVGSVGElement;
 
-    // 3. Remove "data-export-ignore" elements (e.g. selection rect)
+    // 2. Remove "data-export-ignore" elements (e.g. selection rect)
     const ignoredElements = clone.querySelectorAll('[data-export-ignore="true"]');
     ignoredElements.forEach(el => el.remove());
 
-    // 2. Get the crop aspect ratio / dimensions from viewBox
+    // 3. Get the crop aspect ratio / dimensions from viewBox
     let width, height;
 
     if (clone.getAttribute('viewBox')) {
@@ -39,51 +39,18 @@ export async function exportToPng(svgElement: SVGSVGElement, options: { scale?: 
         clone.setAttribute('viewBox', `0 0 ${width} ${height}`);
     }
 
-    // 3. FORCE Width/Height Attributes to match viewBox (Pixels)
+    // 4. FORCE Width/Height Attributes to match viewBox (Pixels)
     clone.setAttribute('width', `${width}px`);
     clone.setAttribute('height', `${height}px`);
 
-    // 4. Handle Background Color
+    // 5. Handle Background Color
     clone.style.backgroundColor = backgroundColor;
 
-    // 5. Serialize
-    const serializer = new XMLSerializer();
-    const svgString = serializer.serializeToString(clone);
-    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(svgBlob);
-
-    const img = new Image();
-
-    // 6. Load Image
-    await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = (e) => reject(e);
-        img.src = url;
-    });
-
-    // 7. Prepare High-Res Canvas
-    const canvas = document.createElement('canvas');
-    canvas.width = width * scale;
-    canvas.height = height * scale;
-    const ctx = canvas.getContext('2d');
-
-    if (!ctx) throw new Error('Could not get canvas context');
-
-    // 8. Fill Background
-    ctx.fillStyle = backgroundColor;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // 9. Draw Image Scaled
-    ctx.scale(scale, scale);
-    ctx.drawImage(img, 0, 0, width, height);
-
-    URL.revokeObjectURL(url);
-
-    // 10. Output
+    // 6. Generate PNG Blob (Shared Logic)
     try {
-        const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
-        if (!blob) throw new Error('Could not generate PNG blob');
+        const blob = await svgToPngBlob(clone, width, height, scale, backgroundColor);
 
+        // 7. Output
         if (destination === 'CLIPBOARD') {
             // Ensure focus for Clipboard API
             window.focus();
@@ -102,7 +69,6 @@ export async function exportToPng(svgElement: SVGSVGElement, options: { scale?: 
             URL.revokeObjectURL(link.href);
             console.log('Image downloaded successfully.');
         }
-
     } catch (error) {
         console.error('Export failed', error);
         if (destination === 'CLIPBOARD') {
@@ -114,9 +80,48 @@ export async function exportToPng(svgElement: SVGSVGElement, options: { scale?: 
 }
 
 /**
- * Exports an SVG element as an SVG file download.
- * Useful for high-quality printing or editing in vector software.
+ * Helper to rasterize SVG to PNG Blob
  */
+async function svgToPngBlob(svgElement: SVGSVGElement, width: number, height: number, scale: number, backgroundColor: string): Promise<Blob> {
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(svgElement);
+    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+
+    const img = new Image();
+
+    try {
+        await new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = (e) => reject(e);
+            img.src = url;
+        });
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width * scale;
+        canvas.height = height * scale;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Could not get canvas context');
+
+        // Fill Background
+        ctx.fillStyle = backgroundColor;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw Image Scaled
+        ctx.scale(scale, scale);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        return await new Promise<Blob>((resolve, reject) => {
+            canvas.toBlob(blob => {
+                if (blob) resolve(blob);
+                else reject(new Error('Could not generate PNG blob'));
+            }, 'image/png');
+        });
+    } finally {
+        URL.revokeObjectURL(url);
+    }
+}
+
 /**
  * Exports an SVG element to the system clipboard as SVG text.
  * Matches PNG behavior (Copy instead of Download).
@@ -150,10 +155,13 @@ export async function exportToSvg(svgElement: SVGSVGElement, backgroundColor = '
     const serializer = new XMLSerializer();
     const svgString = serializer.serializeToString(clone);
 
-    // Copy to Clipboard (Hybrid: SVG Image + Text)
+    // Copy to Clipboard (Hybrid: SVG Image + Text + PNG Fallback)
     try {
         const svgBlob = new Blob([svgString], { type: 'image/svg+xml' });
         const textBlob = new Blob([svgString], { type: 'text/plain' });
+
+        // Generate PNG Fallback (Level 3 scale for high quality)
+        const pngBlob = await svgToPngBlob(clone, width, height, 3, backgroundColor);
 
         // Ensure focus for Clipboard API
         window.focus();
@@ -161,12 +169,11 @@ export async function exportToSvg(svgElement: SVGSVGElement, backgroundColor = '
         await navigator.clipboard.write([
             new ClipboardItem({
                 'text/plain': textBlob,
-                // Note: 'image/svg+xml' support varies by platform/app.
-                // If this fails, we might need to fall back to just text or tell user to use PNG.
-                'image/svg+xml': svgBlob
+                'image/svg+xml': svgBlob,
+                'image/png': pngBlob // Fallback for Chrome/Slack/etc
             })
         ]);
-        console.log('SVG content copied to clipboard (Image+Text).');
+        console.log('SVG content copied to clipboard (Image+Text+PNG).');
     } catch (error) {
         console.error('Failed to copy SVG to clipboard:', error);
         // Fallback to text only if the complex write fails

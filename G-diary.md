@@ -1,3 +1,6 @@
+# Global Memory
+- **Reading Records**: Stored in `C:/Users/lucky/OneDrive/Super-Data-Station/Books` (Markdown format). Always check here for book queries.
+
 # 2025-12-19
 - **Label and Symbol Modes**: Implemented Setup Mode tweaks, Label Mode (A, B, C...) and Symbol Mode (Triangle, Circle, Square, Cross).
 - **Numbered Mode Refinements**:
@@ -53,3 +56,10 @@
         - **手順入力モード**:
             - **左クリック**: 数字石配置 / 最後の手番なら削除(Undo)。
             - **右クリック**: 最後の手番削除(Undo)。入力は不可。
+
+- **2026-01-05**:
+    - **UI復旧**: App.tsx のレンダリング不具合（碁盤消失・ツールバー重複）を修正するため、安定バックアップからファイルを復元しました。
+    - **印刷設定機能**: 
+        - タイトル、ヘッダー、フッター等の表示/非表示切替機能を追加しました。
+        - **バグ修正**: 印刷プレビュー時にマウスホバーで「変な四角」が表示される問題を修正しました（`GoBoard`に`readOnly`モードを追加）。
+        - 変数入力支援機能（ボタン式）を試作しましたが、ユーザビリティの観点から削除し、従来のテキスト表示に戻しました。

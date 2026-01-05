@@ -61,6 +61,7 @@ export interface GoBoardProps {
     markers?: Marker[];
     nextNumber?: number;
     activeColor?: StoneColor;
+    readOnly?: boolean;
 }
 
 const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
@@ -83,7 +84,8 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
     onDragEnd,
     hiddenMoves = [],
     specialLabels = [],
-    markers = []
+    markers = [],
+    readOnly = false
 }, ref) => {
     const CELL_SIZE = 40;
     const MARGIN = 40;
@@ -258,34 +260,36 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
             const stone = (boardState[y - 1] && boardState[y - 1][x - 1]);
 
             // Interaction Area
-            cells.push(
-                <rect
-                    key={`click-${x}-${y}`}
-                    x={cx - CELL_SIZE / 2}
-                    y={cy - CELL_SIZE / 2}
-                    width={CELL_SIZE}
-                    height={CELL_SIZE}
-                    fill="transparent"
-                    onMouseDown={(e) => {
-                        e.preventDefault();
-                        if (e.buttons === 1) onDragStart(x, y);
-                    }}
-                    onContextMenu={(e) => {
-                        e.preventDefault();
-                        onCellRightClick(x, y);
-                    }}
-                    onMouseEnter={(e) => {
-                        onCellMouseEnter(x, y);
-                        if (e.buttons === 1) onDragMove(x, y);
-                    }}
-                    onMouseLeave={() => {
-                        onCellMouseLeave();
-                    }}
-                    onMouseUp={onDragEnd}
-                    onClick={() => onCellClick(x, y)}
-                    className="cursor-pointer hover:fill-blue-500 hover:fill-opacity-10"
-                />
-            );
+            if (!readOnly) {
+                cells.push(
+                    <rect
+                        key={`click-${x}-${y}`}
+                        x={cx - CELL_SIZE / 2}
+                        y={cy - CELL_SIZE / 2}
+                        width={CELL_SIZE}
+                        height={CELL_SIZE}
+                        fill="transparent"
+                        onMouseDown={(e) => {
+                            e.preventDefault();
+                            if (e.buttons === 1) onDragStart(x, y);
+                        }}
+                        onContextMenu={(e) => {
+                            e.preventDefault();
+                            onCellRightClick(x, y);
+                        }}
+                        onMouseEnter={(e) => {
+                            onCellMouseEnter(x, y);
+                            if (e.buttons === 1) onDragMove(x, y);
+                        }}
+                        onMouseLeave={() => {
+                            onCellMouseLeave();
+                        }}
+                        onMouseUp={onDragEnd}
+                        onClick={() => onCellClick(x, y)}
+                        className="cursor-pointer hover:fill-blue-500 hover:fill-opacity-10"
+                    />
+                );
+            }
 
             if (stone) {
                 const isBlack = stone.color === 'BLACK';
