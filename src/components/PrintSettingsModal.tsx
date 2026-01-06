@@ -28,7 +28,7 @@ export const DEFAULT_SETTINGS: PrintSettings = {
     figuresPerPage: 4,
     title: '%GN%',
     showTitle: true,
-    subTitle: '%DT% %PC% %RE%',
+    subTitle: '%DT%  %PC%  %RE%',
     showSubTitle: true,
     header: '%GN% Page %PAGE%',
     showHeader: true,
@@ -117,6 +117,7 @@ const PrintSettingsModal: React.FC<PrintSettingsModalProps> = ({ isOpen, onClose
                                 <span className={settings.pagingType !== 'WHOLE_FILE_FIGURE' ? 'text-gray-400' : ''}>1図あたりの手数</span>
                                 <input type="number" className="w-16 border px-1 py-0.5"
                                     value={settings.movesPerFigure}
+                                    aria-label="1図あたりの手数"
                                     disabled={settings.pagingType !== 'WHOLE_FILE_FIGURE'}
                                     onChange={e => handleChange('movesPerFigure', parseInt(e.target.value) || 50)} />
                             </div>
@@ -152,6 +153,7 @@ const PrintSettingsModal: React.FC<PrintSettingsModalProps> = ({ isOpen, onClose
                         <div className="flex justify-between items-center mb-2">
                             <span className="text-xs">図/ページ</span>
                             <input type="number" className="w-12 border px-1 py-0.5 text-xs"
+                                aria-label="1ページあたりの図数"
                                 value={settings.figuresPerPage} onChange={e => handleChange('figuresPerPage', parseInt(e.target.value) || 4)} />
                         </div>
 
@@ -220,6 +222,7 @@ const PrintSettingsModal: React.FC<PrintSettingsModalProps> = ({ isOpen, onClose
                                 <select
                                     className="border border-gray-400 px-1 w-full"
                                     value={settings.headerFrequency}
+                                    aria-label="ヘッダー表示頻度"
                                     onChange={e => handleChange('headerFrequency', e.target.value as any)}
                                     disabled={!settings.showHeader}
                                 >
