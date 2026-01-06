@@ -97,8 +97,9 @@ function App() {
     const [exportMode, setExportMode] = useState<'SVG' | 'PNG'>(() => {
         try { const saved = localStorage.getItem('gorw_export_mode'); return (saved === 'SVG' || saved === 'PNG') ? saved : 'SVG'; } catch { return 'SVG'; }
     });
+
     const [showCapturedInExport, setShowCapturedInExport] = useState(false);
-    const [isFigureMode, setIsFigureMode] = useState(false);
+
 
     useEffect(() => { localStorage.setItem('gorw_is_monochrome', String(isMonochrome)); }, [isMonochrome]);
 
@@ -456,194 +457,17 @@ function App() {
     // Update v32: Also identifying Manual Labels covering hidden moves.
     // Assign letters A, B, C... to those locations.
     // Footer lists all moves at those locations as "MoveNum [ Label ]".
-    const hiddenMovesData = useMemo(() => {
-        if (currentMoveIndex === 0) return { hiddenMoves: [], specialLabels: [] };
+    // Generate hidden move references and special labels
+    // Logic: Identify board locations with multiple moves (collisions).
+    // Identify Manual Labels covering hidden moves.
+    // Assign letters A, B, C... to those locations.
+    // Footer lists all moves at those locations as "MoveNum [ Label ]".
 
-        const moveHistory = new Map<string, { number: number, color: StoneColor }[]>(); // "x,y" -> list of moves
-
-        // 0. Scan Initial Board (Setup Stones)
-        // Setup stones are considered "Move 0".
-        const initialBoard = history[0].board;
-        const initSize = history[0].boardSize;
-
-        if (initialBoard) {
-            for (let y = 0; y < initSize; y++) {
-                for (let x = 0; x < initSize; x++) {
-                    const stone = initialBoard[y][x];
-                    if (stone) {
-                        const key = `${x},${y}`;
-                        if (!moveHistory.has(key)) moveHistory.set(key, []);
-                        moveHistory.get(key)?.push({ number: 0, color: stone.color });
-                    }
-                }
-            }
-        }
-
-        // 1. Scan History (Diff-based)
-        // 'history' is now the path from Root to Current. We can iterate it just like before.
-        for (let i = 1; i <= currentMoveIndex; i++) {
-            const prevBoard = history[i - 1]?.board;
-            const currBoard = history[i].board;
-            // Diff logic remains valid since history is a linear path snapshot
-            // ...
-            const size = history[i].boardSize;
-
-            if (!prevBoard) continue; // Should not happen given i starts at 1
-
-            for (let y = 0; y < size; y++) {
-                for (let x = 0; x < size; x++) {
-                    const prevStone = prevBoard[y][x];
-                    const currStone = currBoard[y][x];
-
-                    // Detect Stone Placement
-                    // 1. If no previous stone (Empty -> Stone): Record it.
-                    // 2. If previous stone exists:
-                    //    - Only record if COLOR changes (e.g. White -> Black).
-                    //    - Ignore if same color (e.g. Init(B) -> 1(B)), effectively "using" the stone.
-                    if (currStone && (!prevStone || currStone.color !== prevStone.color)) {
-
-                        const key = `${x},${y}`;
-                        if (!moveHistory.has(key)) moveHistory.set(key, []);
-
-                        moveHistory.get(key)?.push({
-                            number: currStone.number ?? -1, // -1 indicating Unnumbered/Simple move
-                            color: currStone.color
-                        });
-                    }
-                }
-            }
-        }
-
-        // 2. Identify Collisions and Assign Labels
-        const labels: { x: number, y: number, label: string }[] = [];
-        const footer: { left: { text: string, color: StoneColor }[], right: { text: string, color: StoneColor } }[] = [];
-
-        let labelIndex = 0;
-        const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
-        const currentBoard = history[currentMoveIndex].board;
-        const currentMarkers = history[currentMoveIndex].markers || [];
-        const manualLabelMap = new Map<string, string>();
-        currentMarkers.forEach((m: Marker) => {
-            if (m.type === 'LABEL') {
-                manualLabelMap.set(`${m.x - 1},${m.y - 1}`, m.value);
-            }
-        });
-
-        const getMoveText = (n: number) => {
-            if (n > 0) return n.toString();
-            if (n === 0) return ""; // Setup stone (No text, just visual stone)
-            return ""; // Unnumbered / Simple stone
-        };
-
-        // We iterate all locations that had stones
-        moveHistory.forEach((moves, key) => {
-            const [x, y] = key.split(',').map(Number);
-            const currentStone = currentBoard[y][x];
-            const manualLabel = manualLabelMap.get(key);
-
-            if (manualLabel) {
-                // Manual Label takes precedence. List ALL moves at this spot.
-                moves.forEach(m => {
-                    footer.push({
-                        left: [{ text: getMoveText(m.number), color: m.color }],
-                        right: { text: manualLabel, color: m.color }
-                    });
-                });
-            } else if (moves.length > 1) {
-                // Collision handling Refined (Step 2110)
-                // Filter actual moves vs setup stones
-                const setupMoves = moves.filter(m => m.number <= 0);
-                const numberedMoves = moves.filter(m => m.number > 0);
-
-                // Sort numbered moves ascending
-                numberedMoves.sort((a, b) => a.number - b.number);
-
-                // Most recent move (visible on board)
-                const topMove = numberedMoves.length > 0 ? numberedMoves[numberedMoves.length - 1] : moves[moves.length - 1];
-
-                if (setupMoves.length > 0) {
-                    // Case: Collision with Setup Stone.
-                    // User Request: "Write A on N's location" and legend "N [ A ]". Omit "Init [ A ]" line.
-                    const label = alphabet[labelIndex % alphabet.length];
-                    labelIndex++;
-                    labels.push({ x: x + 1, y: y + 1, label });
-
-                    // Legend: List ALL moves at this label.
-                    // Right color should match the hidden Setup stone to indicate what was there.
-                    // COMPACT MODE: Group 10, 14, 15 into one entry.
-                    const hiddenSetup = setupMoves[0];
-                    const leftStones = numberedMoves.map(m => ({ text: getMoveText(m.number), color: m.color }));
-
-                    footer.push({
-                        left: leftStones, // Now an array!
-                        right: { text: label, color: hiddenSetup.color }
-                    });
-                } else {
-                    // Case: Pure Numbered Collision (e.g. 10 on 6).
-                    // Use GOWrite style: 10 [ 6 ]. Direct reference. No Label A.
-                    const prevMove = numberedMoves[numberedMoves.length - 2];
-                    if (prevMove) {
-                        footer.push({
-                            left: [{ text: getMoveText(topMove.number), color: topMove.color }],
-                            right: { text: getMoveText(prevMove.number), color: prevMove.color }
-                        });
-                    }
-                }
-            } else {
-                // Single move case.
-                const m = moves[0];
-                // Check visibility.
-                // For Numbered moves: number must match.
-                // For Setup/Simple moves (number=0 or undefined): check color and lack of number on current stone.
-                const isVisible = currentStone && (
-                    (m.number > 0 && currentStone.number === m.number) ||
-                    (m.number <= 0 && !currentStone.number && currentStone.color === m.color)
-                );
-
-                if (!isVisible) {
-                    // It's hidden but NOT a collision (just captured).
-                }
-            }
-        });
-
-        // Sort footer by move number (use first move in group)
-        footer.sort((a, b) => parseInt(a.left[0].text) - parseInt(b.left[0].text));
-
-        return { hiddenMoves: footer, specialLabels: labels };
-    }, [history, currentMoveIndex]);
-
-    const { hiddenMoves, specialLabels } = hiddenMovesData;
 
     // Display Board Logic: Swaps current stone for setup stone during export collision
     const displayBoard = useMemo(() => {
-        if (!isFigureMode) return board;
-
-        // Strategy: "First Priority / Accumulation"
-        // Show stones that occupied the spot FIRST.
-        // 1. Setup stones (History 0).
-        // 2. Moves 1..Current (First priority).
-        // 3. Ignore captures.
-
-        // Start with clean slate for Figure View
-        const exportBoard: BoardState = Array(boardSize).fill(null).map(() => Array(boardSize).fill(null));
-
-        for (let i = 0; i <= currentMoveIndex; i++) {
-            const stepBoard = history[i].board;
-            if (!stepBoard) continue;
-
-            for (let y = 0; y < boardSize; y++) {
-                for (let x = 0; x < boardSize; x++) {
-                    const stone = stepBoard[y][x];
-                    // Fill empty spots only (First Come Priority)
-                    if (stone && !exportBoard[y][x]) {
-                        exportBoard[y][x] = { ...stone };
-                    }
-                }
-            }
-        }
-        return exportBoard;
-    }, [isFigureMode, history, boardSize, currentMoveIndex]);
+        return board;
+    }, [board]);
 
     // Navigation Helpers (Tree Adapted)
     const stepBack = () => {
@@ -765,178 +589,7 @@ function App() {
         return restored;
     }, [history, currentMoveIndex, boardSize]);
 
-    const performExport = useCallback(async (bounds: { minX: number, maxX: number, minY: number, maxY: number }, restoredStones: { x: number, y: number, color: StoneColor, text: string }[] = [], options: { isSvg: boolean, destination?: 'CLIPBOARD' | 'DOWNLOAD', filename?: string }) => {
-        if (!svgRef.current) return;
 
-        const { isSvg, destination = 'CLIPBOARD', filename } = options;
-        const CELL_SIZE = 40;
-        const MARGIN = 40;
-        const PADDING = 20;
-
-        const { minX, maxX, minY, maxY } = bounds;
-
-        const x = (minX - 1) * CELL_SIZE + (MARGIN - PADDING);
-        const y = (minY - 1) * CELL_SIZE + (MARGIN - PADDING);
-        let width = (maxX - minX) * CELL_SIZE + PADDING * 2;
-        let height = (maxY - minY) * CELL_SIZE + PADDING * 2;
-
-        const clone = svgRef.current.cloneNode(true) as SVGSVGElement;
-
-        // Remove selection overlay
-        const overlayById = clone.getElementById('selection-overlay-rect');
-        if (overlayById) overlayById.remove();
-        const overlaysByClass = clone.querySelectorAll('.selection-overlay');
-        overlaysByClass.forEach(o => o.remove());
-        const rects = clone.querySelectorAll('rect');
-        rects.forEach(r => {
-            if (r.getAttribute('fill') === 'rgba(0, 0, 255, 0.2)') r.remove();
-        });
-
-        // Append Restored Stones
-        const svgNS = "http://www.w3.org/2000/svg";
-
-        if (showCapturedInExport) {
-            restoredStones.forEach(stone => {
-                if (stone.x < minX || stone.x > maxX || stone.y < minY || stone.y > maxY) return;
-
-                const cx = MARGIN + (stone.x - 1) * CELL_SIZE;
-                const cy = MARGIN + (stone.y - 1) * CELL_SIZE;
-
-                const g = document.createElementNS(svgNS, 'g');
-
-                const circle = document.createElementNS(svgNS, 'circle');
-                circle.setAttribute('cx', cx.toString());
-                circle.setAttribute('cy', cy.toString());
-                circle.setAttribute('r', '18.4');
-                circle.setAttribute('fill', stone.color === 'BLACK' ? 'black' : 'white');
-                circle.setAttribute('stroke', 'black');
-                circle.setAttribute('stroke-width', stone.color === 'BLACK' ? '2' : '0.7');
-
-                const text = document.createElementNS(svgNS, 'text');
-                text.setAttribute('x', cx.toString());
-                text.setAttribute('y', cy.toString());
-                text.setAttribute('dy', '.35em');
-                text.setAttribute('text-anchor', 'middle');
-                text.setAttribute('fill', stone.color === 'BLACK' ? 'white' : 'black');
-                const fontSize = (stone.text && stone.text.length >= 3) ? '18' : '26';
-                text.setAttribute('font-size', fontSize);
-                text.setAttribute('font-family', 'Arial, sans-serif');
-                text.setAttribute('font-weight', 'bold');
-                text.textContent = stone.text;
-
-                g.appendChild(circle);
-                g.appendChild(text);
-                clone.appendChild(g);
-            });
-        }
-
-        // Handle Footer (Hidden Moves Explanation)
-        const footerGroup = clone.getElementById('footer-group');
-        if (footerGroup) {
-            if (hiddenMoves.length > 0) {
-                // Relocate Footer to be visible in the cropped view
-                const startX = MARGIN + (minX - 1) * CELL_SIZE - CELL_SIZE / 2 + (showCoordinates ? -25 : 0) + 10;
-                // Add more vertical spacing: 40px (Standardized with GoBoard)
-                const startY = MARGIN + (maxY - 1) * CELL_SIZE + CELL_SIZE / 2 + (showCoordinates ? 25 : 0) + 40;
-
-                footerGroup.setAttribute('transform', `translate(${startX}, ${startY})`);
-
-                // Dynamic Flow Layout Logic for Export
-                // We need to calculate widths exactly as GoBoard.tsx does to match layout.
-                const boardDisplayWidth = (maxX - minX + 1) * CELL_SIZE;
-
-                let currentX = 0;
-                let currentY = 0;
-                let maxRowY = 0;
-
-                // Re-flow Footer Items
-                const children = Array.from(footerGroup.children);
-                let itemIndex = 0;
-
-                children.forEach((child) => {
-                    // Skip background rect
-                    if (child.tagName.toLowerCase() === 'rect') return;
-
-                    // Get corresponding data item to calculate width
-                    // hiddenMoves is the source data.
-                    const moveData = hiddenMoves[itemIndex];
-                    if (!moveData) return; // Should not happen
-
-                    const leftW = 20 + (moveData.left.length * 35);
-                    const rightW = 80;
-                    const itemWidth = leftW + rightW;
-
-                    if (itemIndex === 0) {
-                        currentX = 0;
-                        currentY = 0;
-                    } else {
-                        if (currentX + itemWidth + 20 + itemWidth > boardDisplayWidth) {
-                            if (currentX + 20 + itemWidth > boardDisplayWidth) {
-                                currentX = 0;
-                                currentY += 40;
-                            } else {
-                                currentX += 20;
-                            }
-                        } else {
-                            if (currentX + 20 + itemWidth > boardDisplayWidth) {
-                                currentX = 0;
-                                currentY += 40;
-                            } else {
-                                currentX += 20;
-                            }
-                        }
-                    }
-
-                    // Set transform
-                    child.setAttribute('transform', `translate(${currentX}, ${currentY})`);
-
-                    // Advance X for next item
-                    currentX += itemWidth;
-
-                    // Track Max Y for height calc
-                    maxRowY = Math.max(maxRowY, currentY);
-
-                    itemIndex++;
-                });
-
-                // Calculate required extra height based on LAST item's Y position
-                const footerContentHeight = maxRowY + 40; // +40 for the last row height
-
-                // Robust Height Calculation
-                const currentViewboxBottom = y + height;
-                const requiredBottom = startY + footerContentHeight + 30;
-
-                if (requiredBottom > currentViewboxBottom) {
-                    height = requiredBottom - y;
-                }
-            }
-        }
-
-        // Adjust for Coordinates (Match GoBoard logic)
-        let finalX = x;
-        let finalY = y;
-        let finalW = width;
-        let finalH = height;
-
-        if (showCoordinates) {
-            finalX -= 25;
-            finalY -= 25;
-            finalW += 50;
-            finalH += 50;
-        }
-
-        // No width extension needed as we wrap content.
-        clone.setAttribute('viewBox', `${finalX} ${finalY} ${finalW} ${finalH}`);
-        clone.setAttribute('width', `${finalW}`);
-        clone.setAttribute('height', `${finalH}`);
-
-        const bgColor = isMonochrome ? '#FFFFFF' : '#DCB35C';
-        if (isSvg) {
-            await exportToSvg(clone, { backgroundColor: bgColor, destination: destination, filename: filename });
-        } else {
-            await exportToPng(clone, { scale: 3, backgroundColor: bgColor, destination: destination, filename });
-        }
-    }, [hiddenMoves, showCoordinates, showCapturedInExport, isMonochrome]);
 
     // Kifu Metadata
     const [blackName, setBlackName] = useState('');
@@ -969,21 +622,17 @@ function App() {
     const formatPrintString = (template: string, pageNum: number = 1) => {
         let s = template;
 
-        // Helper to format rank
-        const formatRank = (r: string) => {
-            if (!r) return '';
-            let f = r.replace(/[pP]/g, ''); // Remove P logic if needed, or keep for pros? User focused on Dan/Kyu.
-            // Let's stick to D/K primarily.
-
-            // Replace Number + Type (d/k)
-            f = f.replace(/(\d+)([dDkK])/g, (_, numStr, type) => {
+        // Helper to replace rank numbers (Safe for names)
+        const formatRankNumbers = (str: string) => {
+            if (!str) return '';
+            return str.replace(/(\d+)([dDkK段級])/g, (_, numStr, type) => {
                 const n = parseInt(numStr);
-                const isDan = /[dD]/.test(type);
+                const isDan = /[dD段]/.test(type);
                 const unit = isDan ? '段' : '級';
 
                 if (isNaN(n)) return numStr + unit;
 
-                // Kyu: Arabic numerals (as per request)
+                // Kyu: Arabic numerals
                 if (!isDan) return numStr + unit;
 
                 // Dan: Kanji numerals
@@ -999,12 +648,23 @@ function App() {
                 } else {
                     kanjiNum = numStr; // Fallback
                 }
-
                 return kanjiNum + unit;
             });
-
-            return f;
         };
+
+        // Helper to format rank field (Strip P)
+        const formatRankField = (r: string) => {
+            if (!r) return '';
+            let f = r.replace(/[pP]/g, '');
+            return formatRankNumbers(f);
+        };
+
+        const bRankFormatted = formatRankField(blackRank);
+        const wRankFormatted = formatRankField(whiteRank);
+
+        // Also apply formatting to names in case rank is embedded (e.g. "Name 3d")
+        const bNameFormatted = formatRankNumbers(blackName);
+        const wNameFormatted = formatRankNumbers(whiteName);
 
         // Custom Komi formatting logic
         const rawKomiFormatted = (k: string) => {
@@ -1012,9 +672,6 @@ function App() {
             if (k.endsWith('.5')) return k.replace('.5', '目半');
             return k + '目';
         };
-
-        const bRankFormatted = formatRank(blackRank);
-        const wRankFormatted = formatRank(whiteRank);
 
         // %KM% -> "コミ6目半" (User request)
         // %KML% -> "コミ：6目半" (Legacy/Label support)
@@ -1029,6 +686,34 @@ function App() {
         // But "Display Komi in the format 'コミ◯◯目半'" says the whole thing.
         // I will stick to: %KM% = "コミ6目半".
 
+        // Custom Game Result formatting
+        const formatGameResult = (re: string) => {
+            if (!re) return '';
+            // Handle SGF standard B+R, W+3.5 etc
+            const match = re.match(/^([BW])\+(.+)$/);
+            if (match) {
+                const winner = match[1] === 'B' ? '黒' : '白';
+                let type = match[2];
+                if (type === 'R' || type.toLowerCase() === 'resign') type = '中押し';
+                else if (type === 'T' || type.toLowerCase() === 'time') type = '時間切れ';
+                else if (type === 'F' || type.toLowerCase() === 'forfeit') type = '反則';
+                else {
+                    // Score
+                    if (type === '0.5') {
+                        type = '半目';
+                    } else if (type.endsWith('.5')) {
+                        type = type.replace('.5', '目半');
+                    } else if (/^\d+(\.\d+)?$/.test(type)) { // Only append '目' if it's a number
+                        type = type + '目';
+                    }
+                }
+                return `${winner}${type}勝ち`;
+            }
+
+            // Fallback for manual text, just replace X.5 -> X目半 if it looks like a score
+            return re.replace(/(\d+)\.5/g, '$1目半');
+        };
+
         const bRankStr = bRankFormatted ? ` ${bRankFormatted}` : '';
         const wRankStr = wRankFormatted ? ` ${wRankFormatted}` : '';
 
@@ -1036,13 +721,14 @@ function App() {
         s = s.replace(/%EV%/g, gameEvent || '');
         s = s.replace(/%DT%/g, gameDate || '');
         s = s.replace(/%PC%/g, gamePlace || '');
-        s = s.replace(/%PB%/g, blackName || '黒番');
-        s = s.replace(/%PBL%/g, blackName ? `黒：${blackName}${bRankStr}` : '黒番');
+        // Use Formatted Names
+        s = s.replace(/%PB%/g, bNameFormatted || '黒番');
+        s = s.replace(/%PBL%/g, bNameFormatted ? `黒：${bNameFormatted}${bRankStr}` : '黒番');
         s = s.replace(/%BR%/g, bRankFormatted);
-        s = s.replace(/%PW%/g, whiteName || '白番');
-        s = s.replace(/%PWL%/g, whiteName ? `白：${whiteName}${wRankStr}` : '白番');
+        s = s.replace(/%PW%/g, wNameFormatted || '白番');
+        s = s.replace(/%PWL%/g, wNameFormatted ? `白：${wNameFormatted}${wRankStr}` : '白番');
         s = s.replace(/%WR%/g, wRankFormatted);
-        s = s.replace(/%RE%/g, gameResult || '');
+        s = s.replace(/%RE%/g, formatGameResult(gameResult) || '');
 
         // Komi Logic
         if (komi) {
@@ -1059,26 +745,7 @@ function App() {
         return s;
     };
 
-    const handlePrintRequest = (settings: PrintSettings) => {
-        // Side Panel Workaround: Open in new tab to print
-        const sgf = getSGFString();
-        localStorage.setItem('gorw_temp_print_sgf', sgf);
-        localStorage.setItem('gorw_temp_print_settings', JSON.stringify(settings));
-        localStorage.setItem('gorw_temp_print_index', currentMoveIndex.toString());
 
-        // Open new tab (relative path to index.html)
-        const printWindow = window.open('index.html?print_job=true', '_blank');
-        if (!printWindow) {
-            flushSync(() => {
-                setPrintSettings(settings);
-                setShowPrintModal(false);
-            });
-            window.print();
-            return;
-        }
-
-        setShowPrintModal(false);
-    };
 
     // Print Job Initialization
     useEffect(() => {
@@ -1214,6 +881,536 @@ function App() {
 
 
 
+
+
+
+
+
+
+    // const { hiddenMoves, specialLabels } = hiddenMovesData;
+
+
+
+
+
+
+
+    /* RESTORED 2 - LOGIC ONLY */
+    const moveHistory = new Map<string, { number: number, color: StoneColor }[]>(); // "x,y" -> list of moves
+
+    // 0. Scan Initial Board (Setup Stones)
+    // Setup stones are considered "Move 0" for collision detection.
+    const initialBoard = history[0].board;
+    const initSize = history[0].boardSize;
+    if (initialBoard) {
+        for (let y = 0; y < initSize; y++) {
+            for (let x = 0; x < initSize; x++) {
+                const stone = initialBoard[y][x];
+                if (stone) {
+                    const key = `${x},${y}`;
+                    if (!moveHistory.has(key)) moveHistory.set(key, []);
+                    moveHistory.get(key)?.push({ number: 0, color: stone.color });
+                }
+            }
+        }
+    }
+
+    // 1. Scan History (Diff-based) to populate moveHistory
+    for (let i = 1; i <= currentMoveIndex; i++) {
+        const prevBoard = history[i - 1]?.board;
+        const currBoard = history[i].board;
+        const size = history[i].boardSize;
+
+        if (!prevBoard) continue;
+
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const prevStone = prevBoard[y][x];
+                const currStone = currBoard[y][x];
+
+                // Detect Stone Placement (New Stone or Color Change)
+                if (currStone && (!prevStone || currStone.color !== prevStone.color)) {
+                    const key = `${x},${y}`;
+                    if (!moveHistory.has(key)) moveHistory.set(key, []);
+
+                    moveHistory.get(key)?.push({
+                        number: currStone.number ?? -1,
+                        color: currStone.color
+                    });
+                }
+            }
+        }
+    }
+
+    // 2. Identify Collisions and Assign Labels
+    const labels: { x: number, y: number, label: string }[] = [];
+    const footer: { left: { text: string, color: StoneColor }[], right: { text: string, color?: StoneColor, isLabel?: boolean } }[] = [];
+    const stonesToDraw: { x: number, y: number, color: StoneColor, text: string }[] = [];
+
+
+
+
+    const currentMarkers = history[currentMoveIndex].markers || [];
+    const manualLabelMap = new Map<string, string>();
+    currentMarkers.forEach(m => {
+        if (m.type === 'LABEL') {
+            manualLabelMap.set(`${m.x - 1},${m.y - 1}`, m.value);
+        }
+    });
+
+    const getMoveText = (n: number) => {
+        if (n > 0) return n.toString();
+        if (n === 0) return ""; // Setup stone
+        return ""; // Unnumbered
+    };
+
+    moveHistory.forEach((moves, key) => {
+        const [x, y] = key.split(',').map(Number);
+        const manualLabel = manualLabelMap.get(key);
+
+        if (manualLabel) {
+            // Manual Label Priority
+            moves.forEach(m => {
+                footer.push({
+                    left: [{ text: getMoveText(m.number), color: m.color }],
+                    right: { text: manualLabel, color: m.color, isLabel: true }
+                });
+            });
+        } else {
+            // Standard Logic: Handle ALL moves
+            const numberedMoves = moves.filter(m => m.number > 0);
+            numberedMoves.sort((a, b) => a.number - b.number);
+
+            // 1. Identify Base Move (Visible on Board)
+            if (numberedMoves.length > 0) {
+                const baseMove = numberedMoves[0]; // Earliest numbered move
+                // ALWAYS add Base Move to stonesToDraw
+                stonesToDraw.push({
+                    x: x + 1,
+                    y: y + 1,
+                    color: baseMove.color,
+                    text: getMoveText(baseMove.number)
+                });
+
+                // 2. Handle Later Moves -> Legend
+                if (numberedMoves.length > 1) {
+                    const laterMoves = numberedMoves.slice(1);
+                    laterMoves.forEach(m => {
+                        footer.push({
+                            left: [{ text: getMoveText(m.number), color: m.color }],
+                            right: {
+                                text: getMoveText(baseMove.number),
+                                color: baseMove.color,
+                                isLabel: false
+                            }
+                        });
+                    });
+                }
+            }
+
+
+        }
+
+
+
+    });
+
+    // Sort footer by move number (of the hidden move)
+    footer.sort((a, b) => {
+        const valA = parseInt(a.left[0].text) || 0;
+        const valB = parseInt(b.left[0].text) || 0;
+        return valA - valB;
+    });
+
+    const hiddenMoves = footer;
+    const specialLabels = labels;
+
+
+
+    // @ts-ignore
+    const performExport = useCallback(async (bounds: { minX: number, maxX: number, minY: number, maxY: number }, restoredStones: { x: number, y: number, color: StoneColor, text: string }[] = [], options: { isSvg: boolean, destination?: 'CLIPBOARD' | 'DOWNLOAD', filename?: string }) => {
+        if (!svgRef.current) return;
+
+        const { isSvg, destination = 'CLIPBOARD', filename } = options;
+        const CELL_SIZE = 40;
+        const MARGIN = 40;
+        const PADDING = 20;
+
+        const { minX, maxX, minY, maxY } = bounds;
+
+        const x = (minX - 1) * CELL_SIZE + (MARGIN - PADDING);
+        const y = (minY - 1) * CELL_SIZE + (MARGIN - PADDING);
+        let width = (maxX - minX) * CELL_SIZE + PADDING * 2;
+        let height = (maxY - minY) * CELL_SIZE + PADDING * 2;
+
+        const clone = svgRef.current.cloneNode(true) as SVGSVGElement;
+
+        // Remove selection overlay
+        const overlayById = clone.getElementById('selection-overlay-rect');
+        if (overlayById) overlayById.remove();
+        const overlaysByClass = clone.querySelectorAll('.selection-overlay');
+        overlaysByClass.forEach(o => o.remove());
+        const rects = clone.querySelectorAll('rect');
+        rects.forEach(r => {
+            if (r.getAttribute('fill') === 'rgba(0, 0, 255, 0.2)') r.remove();
+        });
+
+        // Append Restored Stones
+        const svgNS = "http://www.w3.org/2000/svg";
+
+        if (showCapturedInExport) {
+            restoredStones.forEach(stone => {
+                if (stone.x < minX || stone.x > maxX || stone.y < minY || stone.y > maxY) return;
+
+                const cx = MARGIN + (stone.x - 1) * CELL_SIZE;
+                const cy = MARGIN + (stone.y - 1) * CELL_SIZE;
+
+                const g = document.createElementNS(svgNS, 'g');
+
+                const circle = document.createElementNS(svgNS, 'circle');
+                circle.setAttribute('cx', cx.toString());
+                circle.setAttribute('cy', cy.toString());
+                circle.setAttribute('r', '18.4');
+                circle.setAttribute('fill', stone.color === 'BLACK' ? 'black' : 'white');
+                circle.setAttribute('stroke', 'black');
+                circle.setAttribute('stroke-width', stone.color === 'BLACK' ? '2' : '0.7');
+
+                const text = document.createElementNS(svgNS, 'text');
+                text.setAttribute('x', cx.toString());
+                text.setAttribute('y', cy.toString());
+                text.setAttribute('dy', '.35em');
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('fill', stone.color === 'BLACK' ? 'white' : 'black');
+                const fontSize = (stone.text && stone.text.length >= 3) ? '18' : '26';
+                text.setAttribute('font-size', fontSize);
+                text.setAttribute('font-family', 'Arial, sans-serif');
+                text.setAttribute('font-weight', 'bold');
+                text.textContent = stone.text;
+
+                g.appendChild(circle);
+                g.appendChild(text);
+                clone.appendChild(g);
+            });
+        }
+
+        // Draw Special Labels (Collision Markers) on Board
+        // This ensures 'A', 'B' etc. appear on top of stones.
+        if (specialLabels.length > 0) {
+            specialLabels.forEach(sl => {
+                if (sl.x < minX || sl.x > maxX || sl.y < minY || sl.y > maxY) return;
+
+                const cx = MARGIN + (sl.x - 1) * CELL_SIZE;
+                const cy = MARGIN + (sl.y - 1) * CELL_SIZE;
+
+                const g = document.createElementNS(svgNS, 'g');
+
+                // Optional: Draw a background circle if needed (usually label just sits on top)
+                // But to ensure visibility on black stones, we might need white text, or smart coloring.
+                // The label logic in GoBoard checks stone color.
+                // For simplified export, let's assume standard visibility rules or just draw a box?
+                // GoBoard uses: <text ... stroke="white" stroke-width="0.5px" ...>
+
+                const text = document.createElementNS(svgNS, 'text');
+                text.setAttribute('x', cx.toString());
+                text.setAttribute('y', cy.toString());
+                text.setAttribute('dy', '.35em');
+                text.setAttribute('text-anchor', 'middle');
+
+                // Determine color based on stone at that position? 
+                // We don't easily have 'board' here, but we can guess or use a consistent style.
+                // Use a high-contrast style: Black text with white partial outline/glow?
+                // Or just Red?
+                // Let's match GoBoard style if possible. GoBoard just renders text.
+                // Let's use Red for visibility as collision marker, or standard black/white.
+                // Ideally we check the stone color.
+                // Let's rely on the footer to explain. Ideally on board it acts as a label.
+
+                text.setAttribute('fill', 'blue'); // Distinct color for markers
+                text.setAttribute('font-size', '20');
+                text.setAttribute('font-weight', 'bold');
+                text.setAttribute('font-family', 'Arial, sans-serif');
+                text.textContent = sl.label;
+
+                // Add a white halo for visibility on black stones
+                text.setAttribute('stroke', 'white');
+                text.setAttribute('stroke-width', '0.5');
+
+                g.appendChild(text);
+                clone.appendChild(g);
+            });
+        }
+
+        // Handle Footer (Hidden Moves Explanation)
+        // const svgNS declared above
+
+
+        const bgColor = isMonochrome ? '#FFFFFF' : '#DCB35C';
+
+        // ... Existing Footer Logic ...
+        if (hiddenMoves.length > 0) {
+            // ... existing checks ...
+
+            // 1. Create a "Cover Rect" to hide any board content below maxY
+            //    The clone contains the full board. Expanding viewBox reveals hidden rows.
+            //    We must cover them with the background color.
+            const coverY = MARGIN + (maxY * CELL_SIZE); // Bottom of the visual crop
+            const coverHeight = 99999; // INCREASED: Arbitrary large height to cover everything below
+
+            const coverRect = document.createElementNS(svgNS, 'rect');
+            coverRect.setAttribute('x', '-9999'); // INCREASED: Cover full width generously
+            coverRect.setAttribute('y', coverY.toString());
+            coverRect.setAttribute('width', '99999'); // INCREASED: Cover full width generously
+            coverRect.setAttribute('height', coverHeight.toString());
+            coverRect.setAttribute('fill', bgColor);
+            clone.appendChild(coverRect);
+
+            // ... Logic to create/clear footerGroup ...
+            console.log("Exporting Legend: hiddenMoves count =", hiddenMoves.length);
+            let footerGroup = clone.getElementById('footer-group');
+            if (!footerGroup) {
+                footerGroup = document.createElementNS(svgNS, 'g');
+                footerGroup.setAttribute('id', 'footer-group');
+                clone.appendChild(footerGroup);
+            }
+
+
+            // Clear existing if any (unlikely)
+            while (footerGroup.firstChild) {
+                footerGroup.removeChild(footerGroup.firstChild);
+            }
+
+            // Relocate Footer to be visible in the cropped view
+            const startX = MARGIN + (minX - 1) * CELL_SIZE - CELL_SIZE / 2 + (showCoordinates ? -25 : 0) + 10;
+
+            // Layout Legend below the cut
+            // Recalculate coverY locally or assume standard logic
+            const lastRowCenterY_Calc = MARGIN + (maxY - 1) * CELL_SIZE;
+            const coverY_Calc = lastRowCenterY_Calc + (CELL_SIZE / 2);
+
+            // Gap of 40px from the cover line
+            const startY = coverY_Calc + 40 + (showCoordinates ? 25 : 0);
+
+            footerGroup.setAttribute('transform', `translate(${startX}, ${startY})`);
+
+            // Dynamic Flow Layout Logic for Export
+            const boardDisplayWidth = (maxX - minX + 1) * CELL_SIZE;
+
+            let cursorX = 0;
+            let cursorY = 0;
+            let maxRowY = 0;
+
+            hiddenMoves.forEach((item) => {
+                // Layout: VisibleStone -- [ -- HiddenStone -- ]
+                // Sizes: Stone Ø36.8 (r=18.4).
+                // Spacings:
+                // VisStone (40px) + Gap(5px) + Bracket(10px) + Gap(5px) + HidStone(40px) + Gap(5px) + Bracket(10px)
+                // Total Block Width approx: 115px
+
+                const blockWidth = 145; // Fixed width for "Stone [ Stone ]" block
+
+                // Wrap Check
+                if (cursorX + blockWidth > boardDisplayWidth && cursorX > 0) {
+                    cursorX = 0;
+                    cursorY += 55; // Row Height
+                }
+
+                // Create Group for this item
+                const itemG = document.createElementNS(svgNS, 'g');
+                itemG.setAttribute('transform', `translate(${cursorX}, ${cursorY})`);
+
+                // Advance cursor for next item
+                cursorX += blockWidth; // No extra gap needed if blockWidth includes padding, or add +10 here
+
+                let drawX = 20; // Start X in group
+
+                // 1. Visible Stone (Left)
+                // Assuming left array has 1 item for standard collisions, or multiple for multi-depth?
+                // The User image shows single visible stone. Let's take the first/last one.
+                const visStone = item.left[0]; // Usually the top one directly
+                if (visStone) {
+                    const c = document.createElementNS(svgNS, 'circle');
+                    c.setAttribute('cx', drawX.toString());
+                    c.setAttribute('cy', '0');
+                    c.setAttribute('r', '18.4');
+                    c.setAttribute('fill', visStone.color === 'BLACK' ? 'black' : 'white');
+                    c.setAttribute('stroke', 'black');
+                    c.setAttribute('stroke-width', visStone.color === 'BLACK' ? '2' : '0.7');
+                    itemG.appendChild(c);
+
+                    const t = document.createElementNS(svgNS, 'text');
+                    t.setAttribute('x', drawX.toString());
+                    t.setAttribute('y', '0');
+                    t.setAttribute('dy', '.35em');
+                    t.setAttribute('text-anchor', 'middle');
+                    t.setAttribute('fill', visStone.color === 'BLACK' ? 'white' : 'black');
+                    const fs = (visStone.text && visStone.text.length >= 3) ? '18' : '26';
+                    t.setAttribute('font-size', fs);
+                    t.setAttribute('font-family', 'Arial, sans-serif');
+                    t.setAttribute('font-weight', 'bold');
+                    t.textContent = visStone.text;
+                    itemG.appendChild(t);
+
+                    drawX += 35; // Advance past stone
+                }
+
+                // 2. Open Bracket
+                const openB = document.createElementNS(svgNS, 'text');
+                openB.setAttribute('x', drawX.toString());
+                openB.setAttribute('y', '0');
+                openB.setAttribute('dy', '.35em');
+                openB.setAttribute('text-anchor', 'middle');
+                openB.setAttribute('fill', 'black');
+                openB.setAttribute('font-size', '24');
+                openB.setAttribute('font-weight', 'bold');
+                openB.textContent = "[";
+                itemG.appendChild(openB);
+
+                drawX += 5; // 括弧の直後に進む
+
+                // 3. Hidden Stone (Right)
+                // Right part of hiddenMoves is { text, color, isLabel }
+                const hidStone = item.right;
+                if (hidStone) {
+                    // Check if it's a label (text only) or a stone
+                    // The goal image implies it's a stone if it has a number/color.
+
+                    if (hidStone.isLabel && !hidStone.color) {
+                        // Fallback for純粋 text labels if color missing?
+                        // But our logic assigns color usually.
+                        const t = document.createElementNS(svgNS, 'text');
+                        t.setAttribute('x', drawX.toString());
+                        t.setAttribute('y', '0');
+                        t.setAttribute('dy', '.35em');
+                        t.setAttribute('alignment-baseline', 'middle');
+                        t.setAttribute('text-anchor', 'middle');
+                        t.setAttribute('font-size', '24');
+                        t.textContent = hidStone.text;
+                        itemG.appendChild(t);
+                    } else {
+                        // Draw Hidden Stone
+                        // 石の中心を括弧内の中央に配置するため、半径分を加算
+                        const stoneCenterX = drawX + 18.4;
+
+                        const c = document.createElementNS(svgNS, 'circle');
+                        c.setAttribute('cx', stoneCenterX.toString());
+                        c.setAttribute('cy', '0');
+                        c.setAttribute('r', '18.4');
+                        c.setAttribute('fill', (hidStone.color === 'BLACK') ? 'black' : 'white');
+                        c.setAttribute('stroke', 'black');
+                        c.setAttribute('stroke-width', (hidStone.color === 'BLACK' ? '2' : '0.7'));
+                        itemG.appendChild(c);
+
+                        const t = document.createElementNS(svgNS, 'text');
+                        t.setAttribute('x', stoneCenterX.toString());
+                        t.setAttribute('y', '0');
+                        t.setAttribute('dy', '.35em');
+                        t.setAttribute('text-anchor', 'middle');
+                        t.setAttribute('fill', (hidStone.color === 'BLACK') ? 'white' : 'black');
+                        const fs = (hidStone.text && hidStone.text.length >= 3) ? '18' : '26';
+                        t.setAttribute('font-size', fs);
+                        t.setAttribute('font-family', 'Arial, sans-serif');
+                        t.setAttribute('font-weight', 'bold');
+                        t.textContent = hidStone.text;
+                        itemG.appendChild(t);
+                    }
+                    drawX += 41.8; // 石の直径(36.8) + 隙間(5)
+                }
+
+                // 4. Close Bracket
+                const closeB = document.createElementNS(svgNS, 'text');
+                closeB.setAttribute('x', drawX.toString());
+                closeB.setAttribute('y', '0');
+                closeB.setAttribute('dy', '.35em');
+                closeB.setAttribute('text-anchor', 'middle');
+                closeB.setAttribute('fill', 'black');
+                closeB.setAttribute('font-size', '24');
+                closeB.setAttribute('font-weight', 'bold');
+                closeB.textContent = "]";
+                itemG.appendChild(closeB);
+
+                footerGroup.appendChild(itemG);
+
+                maxRowY = Math.max(maxRowY, cursorY); // Fixed: currentY -> cursorY
+            });
+
+            const footerContentHeight = maxRowY + 60; // Increased Buffer
+
+            // Robust Height Calculation
+            const currentViewboxBottom = y + height;
+            const requiredBottom = startY + footerContentHeight + 10;
+
+            if (requiredBottom > currentViewboxBottom) {
+                height = requiredBottom - y;
+            }
+        }
+
+        // --- OVERLAY: Draw Collision Bases on Board ---
+        // Iterate collisionOverlays and draw them on top of the board content
+        // coordinates are 1-based board coordinates
+        if (stonesToDraw.length > 0) {
+            const stoneGroup = document.createElementNS(svgNS, 'g');
+            stoneGroup.setAttribute('id', 'collision-overlays');
+            clone.appendChild(stoneGroup); // Append to end to be on top
+
+            stonesToDraw.forEach(stone => {
+                if (stone.x < minX || stone.x > maxX || stone.y < minY || stone.y > maxY) return;
+
+                const cx = MARGIN + (stone.x - 1) * CELL_SIZE;
+                const cy = MARGIN + (stone.y - 1) * CELL_SIZE;
+
+                const c = document.createElementNS(svgNS, 'circle');
+                c.setAttribute('cx', cx.toString());
+                c.setAttribute('cy', cy.toString());
+                c.setAttribute('r', '18.4');
+                c.setAttribute('fill', stone.color === 'BLACK' ? 'black' : 'white');
+                c.setAttribute('stroke', 'black');
+                c.setAttribute('stroke-width', stone.color === 'BLACK' ? '2' : '0.7');
+                stoneGroup.appendChild(c);
+
+                const t = document.createElementNS(svgNS, 'text');
+                t.setAttribute('x', cx.toString());
+                t.setAttribute('y', cy.toString());
+                t.setAttribute('dy', '.35em');
+                t.setAttribute('text-anchor', 'middle');
+                t.setAttribute('fill', stone.color === 'BLACK' ? 'white' : 'black');
+                const fontSize = (stone.text && stone.text.length >= 3) ? '18' : '26';
+                t.setAttribute('font-size', fontSize);
+                t.setAttribute('font-family', 'Arial, sans-serif');
+                t.setAttribute('font-weight', 'bold');
+                t.textContent = stone.text;
+                stoneGroup.appendChild(t);
+            });
+        }
+
+        // Adjust for Coordinates (Match GoBoard logic)
+        let finalX = x;
+        let finalY = y;
+        let finalW = width;
+        let finalH = height;
+
+        if (showCoordinates) {
+            finalX -= 25;
+            finalY -= 25;
+            finalW += 50;
+            finalH += 50;
+        }
+
+
+        // No width extension needed as we wrap content.
+        clone.setAttribute('viewBox', `${finalX} ${finalY} ${finalW} ${finalH}`);
+        clone.setAttribute('width', `${finalW}`);
+        clone.setAttribute('height', `${finalH}`);
+
+        clone.setAttribute('height', `${finalH}`);
+
+        if (isSvg) {
+            await exportToSvg(clone, { backgroundColor: bgColor, destination: destination, filename: filename });
+        } else {
+            await exportToPng(clone, { scale: 3, backgroundColor: bgColor, destination: destination, filename });
+        }
+    }, [hiddenMoves, stonesToDraw, showCoordinates, showCapturedInExport, isMonochrome]);
+
+
     const handleExport = useCallback(async (forcedMode?: 'SVG' | 'PNG', destination?: 'CLIPBOARD' | 'DOWNLOAD') => {
         const modeToUse = forcedMode || exportMode;
         const isSvg = modeToUse === 'SVG';
@@ -1231,19 +1428,21 @@ function App() {
         };
 
         // Auto-Enable Figure Mode (Show Label A) for Export
-        setIsFigureMode(true);
-        // Wait for React Render (Important for visual updates like Labels)
-        await new Promise(r => setTimeout(r, 100));
-
         try {
-            const restored = showCapturedInExport ? getRestoredStones() : [];
+            // MERGE: Captured Stones + Collision Restored Stones (for "Leave 5")
+            // We want collision stones to appear even if showCapturedInExport is false? 
+            // The User requirement "Leave 5" implies the board appearance changes to show 5.
+            // So collisionRestoredStones should always be included for graphical correctness of the diagram.
+            // But let's check if showCapturedInExport logic applies to them. Usually "hidden moves" logic is separate.
+            // Safest: Always include collision stones if we want the diagram to match the "Leave 5" intent.
+            const captured = showCapturedInExport ? getRestoredStones() : [];
+            const restored = captured;
+
             await performExport(fullBounds, restored, { isSvg, destination, filename });
         } catch (err) {
             console.error("Export Error:", err);
-        } finally {
-            // Revert to Operation Mode
-            setIsFigureMode(false);
         }
+
     }, [boardSize, exportMode, showCapturedInExport, getRestoredStones, performExport]);
 
     const handleExportSelection = useCallback(async () => {
@@ -1254,17 +1453,12 @@ function App() {
         const y1 = Math.min(selectionStart.y, selectionEnd.y);
         const y2 = Math.max(selectionStart.y, selectionEnd.y);
 
-        // Auto-Enable Figure Mode (Show Label A) for Export
-        setIsFigureMode(true);
-        // Wait for React Render
-        await new Promise(r => setTimeout(r, 50));
-
         try {
-            const restored = showCapturedInExport ? getRestoredStones() : [];
+            const captured = showCapturedInExport ? getRestoredStones() : [];
+            const restored = captured;
             await performExport({ minX: x1, maxX: x2, minY: y1, maxY: y2 }, restored, { isSvg: exportMode === 'SVG' });
-        } finally {
-            // Revert
-            setIsFigureMode(false);
+        } catch (e) {
+            console.error(e);
         }
 
         // Reset Selection
@@ -1278,7 +1472,8 @@ function App() {
 
 
     // SGF Logic
-    const getSGFString = useCallback(() => {
+    const getSGFString = useCallback((historyOverride?: import('./utils/treeUtilsV2').GameNode[]) => {
+        const targetHistory = historyOverride || history;
         const toSgfCoord = (c: number): string => {
             if (c < 1 || c > 26) return '';
             return String.fromCharCode(96 + c);
@@ -1287,9 +1482,9 @@ function App() {
         const nodes: import('./utils/sgfUtils').SgfNode[] = [];
         const size = boardSize;
 
-        for (let i = 1; i < history.length; i++) {
-            const prev = history[i - 1];
-            const curr = history[i];
+        for (let i = 1; i < targetHistory.length; i++) {
+            const prev = targetHistory[i - 1];
+            const curr = targetHistory[i];
 
             const isMove = curr.nextNumber > prev.nextNumber;
             const moveNumber = prev.nextNumber;
@@ -1407,12 +1602,8 @@ function App() {
                         const sCurr = curr.board[y][x];
                         const c = `${toSgfCoord(x + 1)}${toSgfCoord(y + 1)}`;
 
-                        const same = (sPrev === sCurr) ||
-                            (sPrev && sCurr && sPrev.color === sCurr.color && sPrev.number === sCurr.number) ||
-                            (!sPrev && !sCurr);
-
-                        if (!same) {
-                            if (sPrev) ae.push(c);
+                        if (sPrev !== sCurr) {
+                            if (sPrev && !sCurr) ae.push(c);
                             if (sCurr) {
                                 if (sCurr.color === 'BLACK') ab.push(c);
                                 else aw.push(c);
@@ -1473,7 +1664,7 @@ function App() {
             annotation: gameAnnotation
         };
 
-        return generateSGF(history[0].board, boardSize, nodes, metadata);
+        return generateSGF(targetHistory[0].board, boardSize, nodes, metadata);
     }, [history, currentMoveIndex, boardSize,
         blackName, blackRank, blackTeam,
         whiteName, whiteRank, whiteTeam,
@@ -1515,16 +1706,62 @@ function App() {
                 const file = await handle.getFile();
                 const text = await file.text();
                 loadSGF(text);
-                setSaveFileHandle(handle); // Store handle for Overwrite
-                return;
+                setSaveFileHandle(handle);
+            } else {
+                fileInputRef.current?.click();
             }
         } catch (err) {
             if ((err as Error).name === 'AbortError') return;
-            console.warn('Open File Picker failed, falling back to input', err);
+            console.error('Open SGF failed', err);
         }
-        // Fallback
-        fileInputRef.current?.click();
     };
+
+    const handlePrintRequest = (settings: PrintSettings) => {
+        // Calculate Full History SGF if needed
+        let sgf;
+        if (settings.pagingType === 'WHOLE_FILE_FIGURE' || settings.pagingType === 'WHOLE_FILE_MOVE') {
+            // Traverse from Root to Leaf (Main Line from current split?)
+            // Usually Whole File means "The entire loaded game".
+            // Since we can't easily guess which branch, we use the current branch extended to leaf.
+            // But we need to start from ROOT.
+            let leaf = history[history.length - 1];
+            while (leaf.children && leaf.children.length > 0) {
+                leaf = leaf.children[0];
+            }
+
+            // Reconstruct path from ROOT to Leaf
+            // history[0] is root.
+            const fullHistory: import('./utils/treeUtilsV2').GameNode[] = [];
+            let curr: import('./utils/treeUtilsV2').GameNode | null = leaf;
+            while (curr) {
+                fullHistory.unshift(curr);
+                curr = curr.parent;
+            }
+            sgf = getSGFString(fullHistory);
+        } else {
+            sgf = getSGFString();
+        }
+
+        // Side Panel Workaround: Open in new tab to print
+        localStorage.setItem('gorw_temp_print_sgf', sgf);
+        localStorage.setItem('gorw_temp_print_settings', JSON.stringify(settings));
+        localStorage.setItem('gorw_temp_print_index', currentMoveIndex.toString());
+
+        // Open new tab (relative path to index.html)
+        const printWindow = window.open('index.html?print_job=true', '_blank');
+        if (!printWindow) {
+            flushSync(() => {
+                setPrintSettings(settings);
+                setShowPrintModal(false);
+            });
+            window.print();
+            return;
+        }
+
+        setShowPrintModal(false);
+    };
+
+
 
     const handleSaveSGF = async () => {
         const sgf = getSGFString();
@@ -1771,10 +2008,12 @@ function App() {
         handleExportSelection, handleExport, handleSaveSGF, clearBoard, handleDeleteParams, deleteLastMove
     ]);
 
-    // Generate hidden move references and special labels
-    // Logic: Identify board locations with multiple moves (collisions).
-    // Assign letters A, B, C... to those locations.
-    // Footer lists all moves at those locations as "MoveNum [ Label ]".
+
+
+
+
+
+
 
 
 
@@ -1785,7 +2024,8 @@ function App() {
     const handleDragOver = useCallback((e: React.DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        if (e.dataTransfer.types.includes('Files')) {
+        // Allow dropping if Files OR Text (SGF)
+        if (e.dataTransfer.types.includes('Files') || e.dataTransfer.types.includes('text/plain')) {
             setIsDragging(true);
             e.dataTransfer.dropEffect = 'copy';
         }
@@ -1821,6 +2061,12 @@ function App() {
             } else {
                 alert('SGF files only (.sgf)');
             }
+        } else {
+            // Check for Text Content (Drag selection from web/editor)
+            const text = e.dataTransfer.getData('text');
+            if (text && (text.includes('(;') || text.includes('GM['))) {
+                loadSGF(text);
+            }
         }
     }, [loadSGF]);
 
@@ -1845,7 +2091,7 @@ function App() {
                 {/* Print Area Removed (Moved Outside) */}
                 <div className="flex justify-between w-full items-center mb-2">
                     <div className="flex items-baseline gap-2">
-                        <span className="text-[10px] text-gray-400 font-normal pl-1">v37.0</span>
+                        <span className="text-[10px] text-gray-400 font-normal pl-1">v37.3</span>
                     </div>
                     <div className="flex gap-2 items-center">
 
@@ -1901,6 +2147,7 @@ function App() {
                             >
                                 🖨️
                             </button>
+
                             <button
                                 onClick={() => setShowCapturedInExport(!showCapturedInExport)}
                                 title={`Show Captured Stones in Export: ${showCapturedInExport ? 'ON' : 'OFF'}`}
@@ -2023,7 +2270,7 @@ function App() {
                                 </div>
                             </div>
                             <div className="mt-6 text-center text-xs text-gray-400">
-                                GORewrite v36
+                                GORewrite v37.3
                             </div>
                         </div>
                     </div>
@@ -2106,8 +2353,8 @@ function App() {
                         onDragStart={handleDragStart}
                         onDragMove={handleDragMove}
                         onDragEnd={handleDragEnd}
-                        hiddenMoves={isFigureMode ? hiddenMoves : []}
-                        prioritizeLabel={isFigureMode}
+                        hiddenMoves={[]} // LEGEND HIDDEN ON SCREEN, ONLY FOR EXPORT
+                        prioritizeLabel={false}
                         specialLabels={specialLabels}
                         nextNumber={nextNumber}
                         activeColor={activeColor}
@@ -2190,16 +2437,31 @@ function App() {
 
                         {/* Numbered Stone */}
                         <button
-                            title="Numbered Mode"
+                            title={`Numbered Mode (Click again to toggle color: ${activeColor})`}
                             className={`p-1 rounded-full transition-all ${mode === 'NUMBERED' ? 'bg-blue-100 ring-2 ring-blue-500 scale-110' : 'hover:bg-gray-100 opacity-60 hover:opacity-100'}`}
                             onClick={() => {
-                                setMode('NUMBERED');
-                                setToolMode('STONE');
+                                if (mode === 'NUMBERED') {
+                                    const next = activeColor === 'BLACK' ? 'WHITE' : 'BLACK';
+                                    currentState.activeColor = next;
+                                    setRootNode({ ...rootNode });
+                                    try { localStorage.setItem('gorw_active_color', next); } catch (e) { }
+                                } else {
+                                    setMode('NUMBERED');
+                                    setToolMode('STONE');
+                                }
+                            }}
+                            onContextMenu={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const next = activeColor === 'BLACK' ? 'WHITE' : 'BLACK';
+                                currentState.activeColor = next;
+                                setRootNode({ ...rootNode });
+                                try { localStorage.setItem('gorw_active_color', next); } catch (e) { }
                             }}
                         >
-                            <svg width="16" height="16" viewBox="0 0 24 24" className="text-black">
-                                <circle cx="12" cy="12" r="10" fill="currentColor" />
-                                <text x="12" y="17" textAnchor="middle" fill="white" fontSize="14" fontWeight="bold" fontFamily="sans-serif">1</text>
+                            <svg width="16" height="16" viewBox="0 0 24 24" className={activeColor === 'BLACK' ? "text-black" : "text-gray-600"}>
+                                <circle cx="12" cy="12" r={activeColor === 'BLACK' ? "10" : "9.5"} fill={activeColor === 'BLACK' ? "currentColor" : "white"} stroke={activeColor === 'WHITE' ? "currentColor" : "none"} strokeWidth="1" />
+                                <text x="12" y="17" textAnchor="middle" fill={activeColor === 'BLACK' ? "white" : "black"} fontSize="14" fontWeight="bold" fontFamily="sans-serif">1</text>
                             </svg>
                         </button>
 
@@ -2224,9 +2486,9 @@ function App() {
                                         setSelectedSymbol(val);
                                         setToolMode('SYMBOL');
                                     }}
-                                    className={`h-8 w-10 border-l-0 rounded-r border px-0 text-sm bg-white cursor-pointer transition-all appearance-none text-center ${toolMode === 'SYMBOL' ? 'border-blue-500 ring-1 ring-blue-500 z-10' : 'border-gray-300 hover:bg-gray-100'}`}
+                                    className={`h-8 w-6 border-l-0 rounded-r border px-0 text-sm bg-white cursor-pointer transition-all appearance-none text-center ${toolMode === 'SYMBOL' ? 'border-blue-500 ring-1 ring-blue-500 z-10' : 'border-gray-300 hover:bg-gray-100'}`}
                                 >
-                                    <option value="" disabled hidden>▼</option>
+                                    <option value="" disabled hidden></option>
                                     <option value="TRI">△</option>
                                     <option value="CIR">◯</option>
                                     <option value="SQR">□</option>
@@ -2264,13 +2526,13 @@ function App() {
                             <button onClick={stepBack} disabled={currentMoveIndex === 0} title="Back (Wheel Up)" className="w-7 h-7 rounded bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-sm shadow-sm border border-gray-200">
                                 &lt;
                             </button>
-                            <button onClick={stepForward} disabled={currentMoveIndex === history.length - 1} title="Forward (Wheel Down)" className="w-7 h-7 rounded bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-sm shadow-sm border border-gray-200">
+                            <button onClick={stepForward} disabled={currentState.children.length === 0} title="Forward (Wheel Down)" className="w-7 h-7 rounded bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-sm shadow-sm border border-gray-200">
                                 &gt;
                             </button>
-                            <button onClick={stepForward10} disabled={currentMoveIndex === history.length - 1} title="Forward 10 Moves" className="w-7 h-7 rounded bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-xs shadow-sm border border-gray-200">
+                            <button onClick={stepForward10} disabled={currentState.children.length === 0} title="Forward 10 Moves" className="w-7 h-7 rounded bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-xs shadow-sm border border-gray-200">
                                 &gt;&gt;
                             </button>
-                            <button onClick={stepLast} disabled={currentMoveIndex === history.length - 1} title="Last Move (End)" className="w-7 h-7 rounded bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-xs shadow-sm border border-gray-200">
+                            <button onClick={stepLast} disabled={currentState.children.length === 0} title="Last Move (End)" className="w-7 h-7 rounded bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-xs shadow-sm border border-gray-200">
                                 &gt;|
                             </button>
                         </div>
@@ -2393,10 +2655,19 @@ function App() {
 
                 {/* Mode B: Whole File */}
                 {/* Mode B: Whole File */}
-                {printSettings?.pagingType === 'WHOLE_FILE_FIGURE' && (
+                {(printSettings?.pagingType === 'WHOLE_FILE_FIGURE' || printSettings?.pagingType === 'WHOLE_FILE_MOVE') && (
                     <div className="flex flex-col items-center w-full pt-12 print:pt-0">
                         {(() => {
-                            const figures = generatePrintFigures(history, printSettings.movesPerFigure);
+                            // Calculate Full History from Current Node to End of Variation
+                            let leaf = history[history.length - 1];
+                            while (leaf.children && leaf.children.length > 0) {
+                                leaf = leaf.children[0];
+                            }
+                            const printHistory = [];
+                            let curr: import('./utils/treeUtilsV2').GameNode | null = leaf;
+                            while (curr) { printHistory.unshift(curr); curr = curr.parent; }
+
+                            const figures = generatePrintFigures(printHistory, printSettings.movesPerFigure);
                             const perPage = printSettings.figuresPerPage || 4;
                             const chunks = [];
                             for (let i = 0; i < figures.length; i += perPage) {

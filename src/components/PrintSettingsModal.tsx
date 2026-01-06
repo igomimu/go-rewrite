@@ -103,10 +103,10 @@ const PrintSettingsModal: React.FC<PrintSettingsModalProps> = ({ isOpen, onClose
                                     onChange={() => handleChange('pagingType', 'CURRENT')} />
                                 <span>現在の盤面を印刷</span>
                             </label>
-                            <label className="flex items-center gap-2 cursor-pointer text-gray-500">
-                                <input type="radio" name="pagingType" checked={settings.pagingType === 'WHOLE_FILE_MOVE'} disabled
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="pagingType" checked={settings.pagingType === 'WHOLE_FILE_MOVE'}
                                     onChange={() => handleChange('pagingType', 'WHOLE_FILE_MOVE')} />
-                                <span>棋譜全体 ("設定手数"で分割) (未実装)</span>
+                                <span>棋譜全体 ("設定手数"で分割)</span>
                             </label>
                             <label className="flex items-center gap-2 cursor-pointer">
                                 <input type="radio" name="pagingType" checked={settings.pagingType === 'WHOLE_FILE_FIGURE'}

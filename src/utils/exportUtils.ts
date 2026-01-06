@@ -151,8 +151,22 @@ export async function exportToSvg(svgElement: SVGSVGElement, options: { backgrou
     clone.setAttribute('width', `${width}px`);
     clone.setAttribute('height', `${height}px`);
 
-    // 5. Set background color
-    clone.style.backgroundColor = backgroundColor;
+    // 5. Set background color (Explicit Rect for Word compatibility)
+    // clone.style.backgroundColor = backgroundColor; // unreliable in Word
+
+    const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    bgRect.setAttribute("x", "0");
+    bgRect.setAttribute("y", "0");
+    bgRect.setAttribute("width", "100%");
+    bgRect.setAttribute("height", "100%");
+    bgRect.setAttribute("fill", backgroundColor || "#FFFFFF"); // Default to White if empty
+
+    // Insert as first child
+    if (clone.firstChild) {
+        clone.insertBefore(bgRect, clone.firstChild);
+    } else {
+        clone.appendChild(bgRect);
+    }
 
     // 6. Serialize
     const serializer = new XMLSerializer();
