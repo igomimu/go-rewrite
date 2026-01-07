@@ -303,3 +303,286 @@ export function parseSGF(sgfContent: string): ParsedSGF {
 
     return { board, moves, size, metadata };
 }
+
+// ===== NEW: Tree-based SGF Parsing for Branch Support =====
+
+export interface SgfTreeNode {
+    move?: SgfMove;
+    setup?: { ab: string[], aw: string[], ae: string[] };
+    markers?: { x: number, y: number, type: string, value: string }[];
+    children: SgfTreeNode[];
+}
+
+export interface ParsedSGFTree {
+    board: BoardState;
+    size: number;
+    metadata?: SgfMetadata;
+    root: SgfTreeNode;
+}
+
+export function parseSGFTree(sgfContent: string): ParsedSGFTree {
+    // 1. Determine Size
+    let size = 19;
+    const szMatch = sgfContent.match(/SZ\[(\d+)\]/);
+    if (szMatch) {
+        size = parseInt(szMatch[1]);
+        if (isNaN(size) || size < 1) size = 19;
+    }
+
+    // 2. Parse Metadata
+    const getTag = (tag: string) => {
+        const m = sgfContent.match(new RegExp(`${tag}\\[([^\\]]*)\\]`));
+        return m ? m[1] : undefined;
+    };
+
+    const metadata: SgfMetadata = {
+        gameName: getTag('GN'),
+        event: getTag('EV'),
+        date: getTag('DT'),
+        place: getTag('PC'),
+        round: getTag('RO'),
+        blackName: getTag('PB'),
+        blackRank: getTag('BR'),
+        blackTeam: getTag('BT'),
+        whiteName: getTag('PW'),
+        whiteRank: getTag('WR'),
+        whiteTeam: getTag('WT'),
+        komi: getTag('KM'),
+        handicap: getTag('HA'),
+        result: getTag('RE'),
+        time: getTag('TM'),
+        user: getTag('US'),
+        source: getTag('SO'),
+        gameComment: getTag('GC'),
+        copyright: getTag('CP'),
+        annotation: getTag('AN'),
+    };
+
+    // 3. Initial Board setup
+    const board: BoardState = Array(size).fill(null).map(() => Array(size).fill(null));
+
+    const place = (coord: string, color: StoneColor) => {
+        if (coord.length < 2) return;
+        const x = fromSgfCoord(coord[0]);
+        const y = fromSgfCoord(coord[1]);
+        if (x >= 1 && x <= size && y >= 1 && y <= size) {
+            board[y - 1][x - 1] = { color };
+        }
+    };
+
+    // Parse AB/AW from root node
+    const abMatch = sgfContent.match(/AB((?:\[[a-zA-Z]{2}\])+)/);
+    if (abMatch) {
+        const coords = abMatch[1].match(/\[([a-zA-Z]{2})\]/g) || [];
+        coords.forEach(c => place(c.slice(1, 3), 'BLACK'));
+    }
+    const awMatch = sgfContent.match(/AW((?:\[[a-zA-Z]{2}\])+)/);
+    if (awMatch) {
+        const coords = awMatch[1].match(/\[([a-zA-Z]{2})\]/g) || [];
+        coords.forEach(c => place(c.slice(1, 3), 'WHITE'));
+    }
+
+    // 4. Parse tree structure
+    const root: SgfTreeNode = { children: [] };
+
+    // Find the main content after first (; 
+    const startIdx = sgfContent.indexOf('(');
+    if (startIdx === -1) {
+        return { board, size, metadata, root };
+    }
+
+    // Recursive parser
+    function parseVariation(content: string, startPos: number): { node: SgfTreeNode, endPos: number } {
+        const node: SgfTreeNode = { children: [] };
+        let pos = startPos;
+
+        // Skip whitespace
+        while (pos < content.length && /\s/.test(content[pos])) pos++;
+
+        // Expect ; for a node
+        if (content[pos] === ';') {
+            pos++; // Skip ;
+
+            // Parse properties until next ; or ( or )
+            let propBuffer = '';
+            while (pos < content.length && content[pos] !== ';' && content[pos] !== '(' && content[pos] !== ')') {
+                propBuffer += content[pos];
+                pos++;
+            }
+
+            // Extract move from propBuffer
+            const bMatch = propBuffer.match(/B\[([a-zA-Z]{2})\]/);
+            const wMatch = propBuffer.match(/W\[([a-zA-Z]{2})\]/);
+
+            if (bMatch) {
+                const coord = bMatch[1];
+                const x = fromSgfCoord(coord[0]);
+                const y = fromSgfCoord(coord[1]);
+                if (x >= 1 && x <= size && y >= 1 && y <= size) {
+                    node.move = { x, y, color: 'BLACK' };
+                }
+            } else if (wMatch) {
+                const coord = wMatch[1];
+                const x = fromSgfCoord(coord[0]);
+                const y = fromSgfCoord(coord[1]);
+                if (x >= 1 && x <= size && y >= 1 && y <= size) {
+                    node.move = { x, y, color: 'WHITE' };
+                }
+            }
+        }
+
+        // Now handle children: either more ; nodes or ( variations
+        while (pos < content.length) {
+            // Skip whitespace
+            while (pos < content.length && /\s/.test(content[pos])) pos++;
+
+            if (pos >= content.length || content[pos] === ')') {
+                break;
+            }
+
+            if (content[pos] === ';') {
+                // Continue with child node
+                const result = parseVariation(content, pos);
+                node.children.push(result.node);
+                pos = result.endPos;
+            } else if (content[pos] === '(') {
+                // Start of variation
+                pos++; // Skip (
+                const result = parseVariation(content, pos);
+                node.children.push(result.node);
+                pos = result.endPos;
+                // Skip past closing )
+                if (pos < content.length && content[pos] === ')') pos++;
+            } else {
+                pos++;
+            }
+        }
+
+        return { node, endPos: pos };
+    }
+
+    // Parse from after the first (
+    let parsePos = startIdx + 1;
+
+    // Skip the root node properties (;GM[1]FF[4]SZ[19]...)
+    while (parsePos < sgfContent.length && sgfContent[parsePos] !== ';') parsePos++;
+    if (parsePos < sgfContent.length) parsePos++; // Skip first ;
+
+    // Skip root properties
+    while (parsePos < sgfContent.length &&
+        sgfContent[parsePos] !== ';' &&
+        sgfContent[parsePos] !== '(' &&
+        sgfContent[parsePos] !== ')') {
+        parsePos++;
+    }
+
+    // Now parse the moves
+    while (parsePos < sgfContent.length && sgfContent[parsePos] !== ')') {
+        if (sgfContent[parsePos] === ';' || sgfContent[parsePos] === '(') {
+            if (sgfContent[parsePos] === '(') parsePos++; // Skip (
+            const result = parseVariation(sgfContent, parsePos);
+            root.children.push(result.node);
+            parsePos = result.endPos;
+            if (parsePos < sgfContent.length && sgfContent[parsePos] === ')') parsePos++;
+        } else {
+            parsePos++;
+        }
+    }
+
+    return { board, size, metadata, root };
+}
+
+// ===== SGF Tree Generator =====
+
+export interface GenericGameNode {
+    move?: { x: number, y: number, color: StoneColor };
+    children: GenericGameNode[];
+    markers?: { x: number, y: number, type: string, value: string }[];
+    board?: BoardState;
+}
+
+export function generateSGFTree(root: GenericGameNode, size: number, metadata?: SgfMetadata): string {
+    let sgf = `(;GM[1]FF[4]SZ[${size}]`;
+
+    // Metadata
+    if (metadata) {
+        if (metadata.gameName) sgf += `GN[${metadata.gameName}]`;
+        if (metadata.event) sgf += `EV[${metadata.event}]`;
+        if (metadata.date) sgf += `DT[${metadata.date}]`;
+        if (metadata.place) sgf += `PC[${metadata.place}]`;
+        if (metadata.round) sgf += `RO[${metadata.round}]`;
+        if (metadata.blackName) sgf += `PB[${metadata.blackName}]`;
+        if (metadata.blackRank) sgf += `BR[${metadata.blackRank}]`;
+        if (metadata.blackTeam) sgf += `BT[${metadata.blackTeam}]`;
+        if (metadata.whiteName) sgf += `PW[${metadata.whiteName}]`;
+        if (metadata.whiteRank) sgf += `WR[${metadata.whiteRank}]`;
+        if (metadata.whiteTeam) sgf += `WT[${metadata.whiteTeam}]`;
+        if (metadata.komi) sgf += `KM[${metadata.komi}]`;
+        if (metadata.handicap) sgf += `HA[${metadata.handicap}]`;
+        if (metadata.result) sgf += `RE[${metadata.result}]`;
+        if (metadata.time) sgf += `TM[${metadata.time}]`;
+        if (metadata.user) sgf += `US[${metadata.user}]`;
+        if (metadata.source) sgf += `SO[${metadata.source}]`;
+        if (metadata.gameComment) sgf += `GC[${metadata.gameComment}]`;
+        if (metadata.copyright) sgf += `CP[${metadata.copyright}]`;
+        if (metadata.annotation) sgf += `AN[${metadata.annotation}]`;
+    }
+
+    if (root.board) {
+        const ab: string[] = [];
+        const aw: string[] = [];
+        for (let y = 1; y <= size; y++) {
+            for (let x = 1; x <= size; x++) {
+                if (!root.board[y - 1]) continue; // Safety check
+                const stone = root.board[y - 1][x - 1];
+                if (stone && !stone.number) { // Only Setup stones (no number)
+                    const c = `${toSgfCoord(x)}${toSgfCoord(y)}`;
+                    if (stone.color === 'BLACK') ab.push(c);
+                    else aw.push(c);
+                }
+            }
+        }
+        if (ab.length > 0) sgf += `AB` + ab.map(c => `[${c}]`).join('');
+        if (aw.length > 0) sgf += `AW` + aw.map(c => `[${c}]`).join('');
+    }
+
+    // Helper to generate node content
+    const generateNodeContent = (node: GenericGameNode): string => {
+        let content = '';
+        if (node.move) {
+            const c = node.move.color === 'BLACK' ? 'B' : 'W';
+            const coord = `${toSgfCoord(node.move.x)}${toSgfCoord(node.move.y)}`;
+            content += `;${c}[${coord}]`;
+        }
+        return content;
+    };
+
+    // Recursive traversal
+    const traverse = (node: GenericGameNode): string => {
+        let branchStr = '';
+
+        // Children
+        if (node.children.length === 0) {
+            return '';
+        } else if (node.children.length === 1) {
+            // Single child - Linear
+            const child = node.children[0];
+            branchStr += generateNodeContent(child);
+            branchStr += traverse(child);
+        } else {
+            // Multiple children - Branched
+            for (const child of node.children) {
+                branchStr += `(`;
+                branchStr += generateNodeContent(child);
+                branchStr += traverse(child);
+                branchStr += `)`;
+            }
+        }
+        return branchStr;
+    };
+
+    sgf += traverse(root);
+    sgf += `)`;
+
+    return sgf;
+}

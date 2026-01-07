@@ -95,9 +95,10 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
         minX: 1, maxX: boardSize, minY: 1, maxY: boardSize
     };
 
-    // Visual Tuning Constants (Updated v31: Dynamic + Star Fix)
-    const LINE_WIDTH = 1;
-    const BORDER_WIDTH = 2;
+    // Visual Tuning Constants (Golden Values - Confirmed 2026-01-07)
+    // DO NOT CHANGE WITHOUT USER APPROVAL
+    const LINE_WIDTH = 1.25;
+    const BORDER_WIDTH = 2.5;
     const STONE_RADIUS = CELL_SIZE * 0.46;
     const FONT_SIZE = CELL_SIZE * 0.65;
     const COORD_FONT_SIZE = 14;
@@ -192,7 +193,6 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                 x2={pos} y2={end}
                 stroke="black"
                 strokeWidth={width}
-                vectorEffect="non-scaling-stroke"
                 strokeLinecap="square"
                 className="grid-line"
                 shapeRendering="crispEdges"
@@ -205,7 +205,6 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                 x2={end} y2={pos}
                 stroke="black"
                 strokeWidth={width}
-                vectorEffect="non-scaling-stroke"
                 strokeLinecap="square"
                 className="grid-line"
                 shapeRendering="crispEdges"
@@ -315,7 +314,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                             cx={cx} cy={cy} r={STONE_RADIUS}
                             fill={isBlack ? "black" : "white"}
                             stroke={isBlack ? "black" : "black"}
-                            strokeWidth={isBlack ? 2 : 0.7}
+                            strokeWidth={isBlack ? 2 : 2.0}
                             className={isBlack ? "black-stone" : "white-stone"}
                         // Removed crispEdges from stones for smoothness
                         />

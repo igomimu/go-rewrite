@@ -5,7 +5,7 @@ import GameInfoModal from './components/GameInfoModal'
 import PrintSettingsModal, { PrintSettings } from './components/PrintSettingsModal'
 import { exportToPng, exportToSvg } from './utils/exportUtils'
 import { checkCaptures } from './utils/gameLogic'
-import { parseSGF, generateSGF } from './utils/sgfUtils'
+import { parseSGFTree, generateSGFTree, SgfTreeNode } from './utils/sgfUtils'
 import { generatePrintFigures } from './utils/printUtils'
 
 // Chrome extension download API (type stub)
@@ -797,7 +797,7 @@ function App() {
     }, []);
 
     const loadSGF = (content: string) => {
-        const { board: initialBoard, moves, size, metadata } = parseSGF(content);
+        const { board: initialBoard, size, metadata, root: sgfRoot } = parseSGFTree(content);
         setBoardSize(size);
 
         // Metadata
@@ -823,7 +823,6 @@ function App() {
             setGameCopyright(metadata.copyright || '');
             setGameAnnotation(metadata.annotation || '');
         } else {
-            // Reset if no metadata found (or keep previous? usually reset)
             setBlackName(''); setBlackRank(''); setBlackTeam('');
             setWhiteName(''); setWhiteRank(''); setWhiteTeam('');
             setKomi(''); setHandicap(''); setGameResult('');
@@ -831,50 +830,65 @@ function App() {
             setGameName(''); setGameUser(''); setGameSource(''); setGameComment(''); setGameCopyright(''); setGameAnnotation('');
         }
 
-        // Replay Logic (Tree)
-        // 1. Initial State (Setup)
+        // Create Root GameNode
         const root = createNode(null, initialBoard, 1, 'BLACK', size);
 
-        let currentNode = root;
-        // Board state tracking
-        let currentBoard = JSON.parse(JSON.stringify(initialBoard));
-        let moveNum = 1;
+        // Recursive Builder
+        const buildTree = (sgfNode: SgfTreeNode, parentGameNode: import('./utils/treeUtilsV2').GameNode, parentBoard: BoardState, moveNum: number, activeColor: StoneColor) => {
+            // Traverse children
+            for (const childSgf of sgfNode.children) {
+                if (childSgf.move) {
+                    const { x, y, color } = childSgf.move;
+                    // Validate
+                    if (x < 1 || x > size || y < 1 || y > size) continue;
 
-        // 2. Iterate Moves
-        moves.forEach(move => {
-            const { x, y, color } = move;
+                    // Simulate Move
+                    const nextBoard = JSON.parse(JSON.stringify(parentBoard));
+                    nextBoard[y - 1][x - 1] = { color, number: moveNum };
 
-            // Validate stats
-            if (x < 1 || x > size || y < 1 || y > size) return;
+                    const captures = checkCaptures(nextBoard, x - 1, y - 1, color);
+                    captures.forEach(c => { nextBoard[c.y][c.x] = null; });
 
-            // Place stone
-            currentBoard[y - 1][x - 1] = { color, number: moveNum };
+                    const nextActive = color === 'BLACK' ? 'WHITE' : 'BLACK';
+                    const nextNum = moveNum + 1;
 
-            // Check captures
-            const captures = checkCaptures(currentBoard, x - 1, y - 1, color);
-            captures.forEach(c => {
-                currentBoard[c.y][c.x] = null;
-            });
+                    // Add to Tree
+                    const childGameNode = addMove(
+                        parentGameNode,
+                        nextBoard,
+                        nextNum,
+                        nextActive,
+                        size,
+                        childSgf.move
+                    );
 
-            // Prepare next state
-            const nextActive = color === 'BLACK' ? 'WHITE' : 'BLACK';
-            const nextNum = moveNum + 1;
+                    // Add Markers if any
+                    if (childSgf.markers) {
+                        childGameNode.markers = childSgf.markers as Marker[];
+                    }
 
-            // Add to Tree
-            const nextNode = addMove(
-                currentNode,
-                JSON.parse(JSON.stringify(currentBoard)),
-                nextNum,
-                nextActive,
-                size,
-                move
-            );
+                    // Recurse
+                    buildTree(childSgf, childGameNode, nextBoard, nextNum, nextActive);
+                } else {
+                    // Node without move (e.g. comment only, or setup changes in middle?)
+                    // For now, if it has children, we might need to handle it.
+                    // But standard game trees usually have moves.
+                    // If it's a pass?
+                    // If recursive structure has empty node as branch holder...
+                    // We'll skip adding a GameNode but recurse logic?
+                    // It complicates `parentGameNode`.
+                    // Ideally every SGF node maps to GameNode.
+                    // If no move, we can duplicate the state (Pass) or just skip?
+                    // Let's assume skip for now unless it breaks structure.
+                    buildTree(childSgf, parentGameNode, parentBoard, moveNum, activeColor);
+                }
+            }
+        };
 
-            currentNode = nextNode;
-            moveNum++;
-        });
+        // Start recursion
+        // sgfRoot is the Start Node (Setup). Its children are the first moves.
+        buildTree(sgfRoot, root, initialBoard, 1, 'BLACK');
 
-        // Update State
         setRootNode(root);
         setCurrentNodeId(root.id);
     };
@@ -1472,207 +1486,21 @@ function App() {
 
 
     // SGF Logic
-    const getSGFString = useCallback((historyOverride?: import('./utils/treeUtilsV2').GameNode[]) => {
-        const targetHistory = historyOverride || history;
-        const toSgfCoord = (c: number): string => {
-            if (c < 1 || c > 26) return '';
-            return String.fromCharCode(96 + c);
-        };
-
-        const nodes: import('./utils/sgfUtils').SgfNode[] = [];
-        const size = boardSize;
-
-        for (let i = 1; i < targetHistory.length; i++) {
-            const prev = targetHistory[i - 1];
-            const curr = targetHistory[i];
-
-            const isMove = curr.nextNumber > prev.nextNumber;
-            const moveNumber = prev.nextNumber;
-
-            if (isMove) {
-                let moveCoord = '';
-                let moveColor: StoneColor = 'BLACK';
-                let moveX = -1;
-                let moveY = -1;
-
-                for (let y = 0; y < size; y++) {
-                    for (let x = 0; x < size; x++) {
-                        const s = curr.board[y][x];
-                        if (s && s.number === moveNumber) {
-                            moveCoord = `${toSgfCoord(x + 1)}${toSgfCoord(y + 1)}`;
-                            moveColor = s.color;
-                            moveX = x;
-                            moveY = y;
-                            break;
-                        }
-                    }
-                }
-
-                // Calculate natural captures to exclude them from AE
-                const naturalCaptureSet = new Set<string>();
-                if (moveX !== -1) {
-                    // Simulate move on previous board
-                    const tempBoard = prev.board.map((r: (Stone | null)[]) => [...r]);
-                    // Only place if empty? Standard move assumes empty. 
-                    // But here we are just checking captures logic.
-                    tempBoard[moveY][moveX] = { color: moveColor };
-
-                    const captures = checkCaptures(tempBoard, moveX, moveY, moveColor);
-                    captures.forEach(c => {
-                        naturalCaptureSet.add(`${toSgfCoord(c.x + 1)}${toSgfCoord(c.y + 1)}`);
-                    });
-                }
-
-                const ae: string[] = [];
-                const ab: string[] = [];
-                const aw: string[] = [];
-
-                for (let y = 0; y < size; y++) {
-                    for (let x = 0; x < size; x++) {
-                        const sPrev = prev.board[y][x];
-                        const sCurr = curr.board[y][x];
-                        const c = `${toSgfCoord(x + 1)}${toSgfCoord(y + 1)}`;
-
-                        const same = (sPrev === sCurr) ||
-                            (sPrev && sCurr && sPrev.color === sCurr.color && sPrev.number === sCurr.number) ||
-                            (!sPrev && !sCurr);
-
-                        if (!same) {
-                            if (sPrev && !sCurr) {
-                                // Stone removed. Check if it's a natural capture.
-                                if (!naturalCaptureSet.has(c)) {
-                                    ae.push(c);
-                                }
-                            } else if (!sPrev && sCurr) {
-                                if (sCurr.number === moveNumber && c === moveCoord) {
-                                    // Move stone
-                                } else {
-                                    if (sCurr.color === 'BLACK') ab.push(c);
-                                    else aw.push(c);
-                                }
-                            } else if (sPrev && sCurr) {
-                                ae.push(c);
-                                if (sCurr.number === moveNumber && c === moveCoord) {
-                                    // Move stone replacement
-                                } else {
-                                    if (sCurr.color === 'BLACK') ab.push(c);
-                                    else aw.push(c);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Prepare Annotations
-                const lb: string[] = [];
-                const tr: string[] = [];
-                const cr: string[] = [];
-                const sq: string[] = [];
-                const ma: string[] = [];
-                if (curr.markers) {
-                    curr.markers.forEach((m: Marker) => {
-                        const c = `${toSgfCoord(m.x)}${toSgfCoord(m.y)}`;
-                        if (m.type === 'LABEL') lb.push(`${c}:${m.value}`);
-                        else if (m.type === 'SYMBOL') {
-                            if (m.value === 'TRI') tr.push(c);
-                            else if (m.value === 'CIR') cr.push(c);
-                            else if (m.value === 'SQR') sq.push(c);
-                            else if (m.value === 'X') ma.push(c);
-                        }
-                    });
-                }
-
-                nodes.push({
-                    type: 'MOVE',
-                    color: moveColor,
-                    coord: moveCoord,
-                    number: moveNumber,
-                    ae, ab, aw,
-                    lb, tr, cr, sq, ma
-                });
-
-            } else {
-                const ae: string[] = [];
-                const ab: string[] = [];
-                const aw: string[] = [];
-
-                for (let y = 0; y < size; y++) {
-                    for (let x = 0; x < size; x++) {
-                        const sPrev = prev.board[y][x];
-                        const sCurr = curr.board[y][x];
-                        const c = `${toSgfCoord(x + 1)}${toSgfCoord(y + 1)}`;
-
-                        if (sPrev !== sCurr) {
-                            if (sPrev && !sCurr) ae.push(c);
-                            if (sCurr) {
-                                if (sCurr.color === 'BLACK') ab.push(c);
-                                else aw.push(c);
-                            }
-                        }
-                    }
-                }
-
-                // Prepare Annotations
-                const lb: string[] = [];
-                const tr: string[] = [];
-                const cr: string[] = [];
-                const sq: string[] = [];
-                const ma: string[] = [];
-                if (curr.markers) {
-                    curr.markers.forEach((m: Marker) => {
-                        const c = `${toSgfCoord(m.x)}${toSgfCoord(m.y)}`;
-                        if (m.type === 'LABEL') lb.push(`${c}:${m.value}`);
-                        else if (m.type === 'SYMBOL') {
-                            if (m.value === 'TRI') tr.push(c);
-                            else if (m.value === 'CIR') cr.push(c);
-                            else if (m.value === 'SQR') sq.push(c);
-                            else if (m.value === 'X') ma.push(c);
-                        }
-                    });
-                }
-
-                if (ae.length > 0 || ab.length > 0 || aw.length > 0 || lb.length > 0 || tr.length > 0 || cr.length > 0 || sq.length > 0 || ma.length > 0) {
-                    nodes.push({
-                        type: 'SETUP',
-                        ae, ab, aw,
-                        lb, tr, cr, sq, ma
-                    });
-                }
-            }
-        }
+    const getSGFString = useCallback(() => {
+        // historyOverride is ignored/removed for full tree save
 
         const metadata: import('./utils/sgfUtils').SgfMetadata = {
-            blackName,
-            blackRank,
-            blackTeam,
-            whiteName,
-            whiteRank,
-            whiteTeam,
-            komi,
-            handicap,
-            result: gameResult,
-            date: gameDate,
-            place: gamePlace,
-            event: gameEvent,
-            round: gameRound,
-            time: gameTime,
-            gameName,
-            user: gameUser,
-            source: gameSource,
-            gameComment,
-            copyright: gameCopyright,
-            annotation: gameAnnotation
+            gameName, event: gameEvent, date: gameDate, place: gamePlace, round: gameRound,
+            blackName, blackRank, blackTeam, whiteName, whiteRank, whiteTeam,
+            komi, handicap, result: gameResult, time: gameTime,
+            user: gameUser, source: gameSource, gameComment, copyright: gameCopyright, annotation: gameAnnotation
         };
 
-        return generateSGF(targetHistory[0].board, boardSize, nodes, metadata);
-    }, [history, currentMoveIndex, boardSize,
-        blackName, blackRank, blackTeam,
-        whiteName, whiteRank, whiteTeam,
-        komi, handicap, gameResult, gameDate,
-        gamePlace, gameEvent, gameRound, gameTime,
-        gameName, gameUser, gameSource,
-        gameComment, gameCopyright, gameAnnotation
-    ]);
+        // Pass rootNode to generator
+        // We cast rootNode to any to avoid strict structural recursion mismatch issues if any
+        return generateSGFTree(rootNode as any, rootNode.boardSize || boardSize, metadata);
+
+    }, [rootNode, boardSize, gameName, gameEvent, gameDate, gamePlace, gameRound, blackName, blackRank, blackTeam, whiteName, whiteRank, whiteTeam, komi, handicap, gameResult, gameTime, gameUser, gameSource, gameComment, gameCopyright, gameAnnotation]);
 
     const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -1731,13 +1559,7 @@ function App() {
 
             // Reconstruct path from ROOT to Leaf
             // history[0] is root.
-            const fullHistory: import('./utils/treeUtilsV2').GameNode[] = [];
-            let curr: import('./utils/treeUtilsV2').GameNode | null = leaf;
-            while (curr) {
-                fullHistory.unshift(curr);
-                curr = curr.parent;
-            }
-            sgf = getSGFString(fullHistory);
+            sgf = getSGFString();
         } else {
             sgf = getSGFString();
         }
@@ -2091,7 +1913,7 @@ function App() {
                 {/* Print Area Removed (Moved Outside) */}
                 <div className="flex justify-between w-full items-center mb-2">
                     <div className="flex items-baseline gap-2">
-                        <span className="text-[10px] text-gray-400 font-normal pl-1">v37.3</span>
+                        <span className="text-[10px] text-gray-400 font-normal pl-1">v39.1.6</span>
                     </div>
                     <div className="flex gap-2 items-center">
 

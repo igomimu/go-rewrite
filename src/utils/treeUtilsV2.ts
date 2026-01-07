@@ -71,7 +71,7 @@ export const addMove = (
         return existing;
     }
 
-    // Create new
+    // Create new (will create branch if parent already has children)
     const newNode = createNode(parent, board, nextNumber, activeColor, boardSize, move);
     parent.children.push(newNode);
     return newNode;
