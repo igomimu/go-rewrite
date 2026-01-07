@@ -2292,6 +2292,10 @@ function App() {
                                 } else {
                                     setMode('NUMBERED');
                                     setToolMode('STONE');
+                                    // 番号モード切替時は常に黒から開始
+                                    currentState.activeColor = 'BLACK';
+                                    setRootNode({ ...rootNode });
+                                    try { localStorage.setItem('gorw_active_color', 'BLACK'); } catch (e) { }
                                 }
                             }}
                             onContextMenu={(e) => {
