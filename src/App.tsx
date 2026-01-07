@@ -1893,6 +1893,28 @@ function App() {
     }, [loadSGF]);
 
 
+    // Branch Candidates
+    const branchCandidates = useMemo(() => {
+        const candidates: Marker[] = [];
+        // history is [Root, ..., Current]. Last element is current node.
+        const current = history[history.length - 1];
+        if (!current || !current.children || current.children.length === 0) return candidates;
+
+        // If we have children, they are candidates.
+        current.children.forEach((child, idx) => {
+            if (child.move) {
+                const label = String.fromCharCode(65 + idx); // A, B, C...
+                candidates.push({
+                    x: child.move.x,
+                    y: child.move.y,
+                    type: 'LABEL',
+                    value: label
+                });
+            }
+        });
+        return candidates;
+    }, [history]);
+
     return (
         <>
             <div
@@ -2180,7 +2202,7 @@ function App() {
                         specialLabels={specialLabels}
                         nextNumber={nextNumber}
                         activeColor={activeColor}
-                        markers={history[currentMoveIndex]?.markers || []}
+                        markers={[...(history[currentMoveIndex]?.markers || []), ...branchCandidates]}
                     />
 
                     {/* Float Controls: Zoom / Reset */}
