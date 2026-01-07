@@ -1711,7 +1711,7 @@ function App() {
     };
 
     const clearBoard = () => {
-        const newRoot = createNode(null, Array(boardSize).fill(null).map(() => Array(boardSize).fill(null)), 1, 'BLACK', boardSize);
+        const newRoot = createNode(null, Array(boardSize).fill(null).map(() => Array(boardSize).fill(null)), 1, getInitialColor(), boardSize);
         setRootNode(newRoot);
         setCurrentNodeId(newRoot.id);
     };
