@@ -2202,7 +2202,7 @@ function App() {
                         specialLabels={specialLabels}
                         nextNumber={nextNumber}
                         activeColor={activeColor}
-                        markers={[...(history[currentMoveIndex]?.markers || []), ...branchCandidates]}
+                        markers={history[currentMoveIndex]?.markers || []}
                     />
 
                     {/* Float Controls: Zoom / Reset */}
@@ -2380,6 +2380,29 @@ function App() {
                                 &gt;|
                             </button>
                         </div>
+
+                        {/* Branch Candidates (if multiple branches exist) */}
+                        {branchCandidates.length > 1 && (
+                            <div className="flex items-center gap-1 ml-2">
+                                <span className="text-xs text-gray-500">分岐:</span>
+                                {branchCandidates.map((candidate, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => {
+                                            // Navigate to this branch
+                                            const targetChild = currentState.children[idx];
+                                            if (targetChild) {
+                                                setCurrentNodeId(targetChild.id);
+                                            }
+                                        }}
+                                        className="w-6 h-6 rounded bg-white hover:bg-yellow-100 text-gray-800 border border-yellow-400 flex items-center justify-center font-bold text-xs shadow-sm transition-all"
+                                        title={`分岐 ${candidate.value} (${candidate.x},${candidate.y})`}
+                                    >
+                                        {candidate.value}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
 
