@@ -95,10 +95,10 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
         minX: 1, maxX: boardSize, minY: 1, maxY: boardSize
     };
 
-    // Visual Tuning Constants (Golden Values - Confirmed 2026-01-07)
-    // DO NOT CHANGE WITHOUT USER APPROVAL
-    const LINE_WIDTH = 1.25;
-    const BORDER_WIDTH = 2.5;
+    // Visual Tuning Constants (Reverted to Integer for Pixel-Perfect Rendering)
+    // Decimal values (1.25, 2.5) caused subpixel rendering issues
+    const LINE_WIDTH = 1;
+    const BORDER_WIDTH = 2;
     const STONE_RADIUS = CELL_SIZE * 0.46;
     const FONT_SIZE = CELL_SIZE * 0.65;
     const COORD_FONT_SIZE = 14;
@@ -196,6 +196,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                 strokeLinecap="square"
                 className="grid-line"
                 shapeRendering="crispEdges"
+                vectorEffect="non-scaling-stroke"
             />
         );
         lines.push(
@@ -208,6 +209,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                 strokeLinecap="square"
                 className="grid-line"
                 shapeRendering="crispEdges"
+                vectorEffect="non-scaling-stroke"
             />
         );
     }
