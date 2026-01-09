@@ -300,9 +300,18 @@ function App() {
     };
 
     // Pass Move (not fully implemented in Tree, just alert for now)
+    // Pass Move implementation
     const handlePass = () => {
         if (mode !== 'NUMBERED') return;
-        alert("Pass not fully implemented in Tree mode yet.");
+
+        // Create new board state (unchanged)
+        const newBoard = board.map((row: (Stone | null)[]) => row.map((c: Stone | null) => c ? { ...c } : null));
+
+        const newNextNum = nextNumber + 1;
+        const newActiveColor = activeColor === 'BLACK' ? 'WHITE' : 'BLACK';
+
+        // Commit PASS move (x=0, y=0)
+        commitState(newBoard, newNextNum, newActiveColor, boardSize, [], { x: 0, y: 0, color: activeColor });
     };
 
     const handleWheel = (delta: number) => {
@@ -480,7 +489,18 @@ function App() {
             setCurrentNodeId(currentState.children[0].id);
         }
     };
-    const deleteLastMove = stepBack;
+    const deleteLastMove = () => {
+        if (currentState === rootNode) return;
+        if (currentState.parent) {
+            const parent = currentState.parent;
+            const idx = parent.children.indexOf(currentState);
+            if (idx >= 0) {
+                parent.children.splice(idx, 1);
+                setCurrentNodeId(parent.id);
+                setRootNode({ ...rootNode });
+            }
+        }
+    };
     const restoreMove = stepForward;
     const stepFirst = () => setCurrentNodeId(rootNode.id);
     const stepLast = () => {
@@ -839,15 +859,21 @@ function App() {
             for (const childSgf of sgfNode.children) {
                 if (childSgf.move) {
                     const { x, y, color } = childSgf.move;
-                    // Validate
-                    if (x < 1 || x > size || y < 1 || y > size) continue;
+
+                    // PASS Check (x=0, y=0)
+                    const isPass = (x === 0 && y === 0);
+
+                    // Validate (Allow Pass)
+                    if (!isPass && (x < 1 || x > size || y < 1 || y > size)) continue;
 
                     // Simulate Move
                     const nextBoard = JSON.parse(JSON.stringify(parentBoard));
-                    nextBoard[y - 1][x - 1] = { color, number: moveNum };
 
-                    const captures = checkCaptures(nextBoard, x - 1, y - 1, color);
-                    captures.forEach(c => { nextBoard[c.y][c.x] = null; });
+                    if (!isPass) {
+                        nextBoard[y - 1][x - 1] = { color, number: moveNum };
+                        const captures = checkCaptures(nextBoard, x - 1, y - 1, color);
+                        captures.forEach(c => { nextBoard[c.y][c.x] = null; });
+                    }
 
                     const nextActive = color === 'BLACK' ? 'WHITE' : 'BLACK';
                     const nextNum = moveNum + 1;
@@ -1428,8 +1454,8 @@ function App() {
     const handleExport = useCallback(async (forcedMode?: 'SVG' | 'PNG', destination?: 'CLIPBOARD' | 'DOWNLOAD') => {
         const modeToUse = forcedMode || exportMode;
         const isSvg = modeToUse === 'SVG';
-        const ext = isSvg ? 'svg' : 'png';
-        const filename = `go_board_${new Date().toISOString().slice(0, 10)}.${ext}`;
+
+        const filename = ''; // Empty filename as requested
 
         if (!svgRef.current) return;
 
@@ -1789,17 +1815,26 @@ function App() {
                         handleSaveSGF();
                         break;
                     case 'f': // Copy Image
+                        e.preventDefault();
                         if (selectionStart && selectionEnd) {
                             handleExportSelection();
                         } else {
                             handleExport();
                         }
                         break;
-                    case 'b': // Copy SGF
+                    case 'c': // Ctrl+C: Copy SGF
+                        // If user is selecting text (e.g. in inputs), don't override
+                        if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+
+                        // Check for text selection
+                        const sel = window.getSelection();
+                        if (sel && sel.toString().length > 0) return;
+
+                        e.preventDefault();
+
                         const sgf = getSGFString();
                         try {
                             await navigator.clipboard.writeText(sgf);
-                            // Optional: Toast notification could be nice here
                             console.log('SGF Copied to clipboard');
                         } catch (err) {
                             console.error('Failed to copy SGF', err);
@@ -1935,7 +1970,7 @@ function App() {
                 {/* Print Area Removed (Moved Outside) */}
                 <div className="flex justify-between w-full items-center mb-2">
                     <div className="flex items-baseline gap-2">
-                        <span className="text-[10px] text-gray-400 font-normal pl-1">v39.1.6</span>
+                        <span className="text-[10px] text-gray-400 font-normal pl-1">v39.1.7</span>
                     </div>
                     <div className="flex gap-2 items-center">
 

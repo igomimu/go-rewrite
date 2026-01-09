@@ -1,3 +1,6 @@
+declare const chrome: any;
+
+
 /**
  * Exports an SVG element to the system clipboard as a PNG image.
  * Uses a Canvas to rasterize the SVG at a high resolution.
@@ -16,7 +19,8 @@
  * - Remove elements marked with data-export-ignore="true" (like selection rect).
  */
 export async function exportToPng(svgElement: SVGSVGElement, options: { scale?: number, backgroundColor?: string, destination?: 'CLIPBOARD' | 'DOWNLOAD', filename?: string } = {}): Promise<void> {
-    const { scale = 1, backgroundColor = '#DCB35C', destination = 'CLIPBOARD', filename = 'go_board.png' } = options;
+    // Default filename empty to allow Save As dialog to handle it (or use browser default)
+    const { scale = 1, backgroundColor = '#DCB35C', destination = 'CLIPBOARD', filename = '' } = options;
 
     // 1. Clone the SVG to manipulate it without affecting the DOM
     const clone = svgElement.cloneNode(true) as SVGSVGElement;
@@ -59,21 +63,15 @@ export async function exportToPng(svgElement: SVGSVGElement, options: { scale?: 
             ]);
             console.log('Image copied to clipboard successfully.');
         } else {
-            // Download
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(link.href);
-            console.log('Image downloaded successfully.');
+            // Download using helper
+            await saveFile(blob, filename, 'PNG Image', 'image/png');
         }
     } catch (error) {
         console.error('Export failed', error);
         if (destination === 'CLIPBOARD') {
             alert('クリップボードへのコピーに失敗しました。');
         } else {
+            console.error('Save failed', error);
             alert('画像の保存に失敗しました。');
         }
     }
@@ -127,7 +125,8 @@ async function svgToPngBlob(svgElement: SVGSVGElement, width: number, height: nu
  * Matches PNG behavior (Copy instead of Download).
  */
 export async function exportToSvg(svgElement: SVGSVGElement, options: { backgroundColor?: string, destination?: 'CLIPBOARD' | 'DOWNLOAD', filename?: string } = {}): Promise<void> {
-    const { backgroundColor = '#DCB35C', destination = 'CLIPBOARD', filename = 'go_board.svg' } = options;
+    // Default filename empty
+    const { backgroundColor = '#DCB35C', destination = 'CLIPBOARD', filename = '' } = options;
     const clone = svgElement.cloneNode(true) as SVGSVGElement;
 
     // Remove "data-export-ignore" elements
@@ -174,14 +173,7 @@ export async function exportToSvg(svgElement: SVGSVGElement, options: { backgrou
 
     if (destination === 'DOWNLOAD') {
         const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(svgBlob);
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
-        console.log('SVG downloaded successfully.');
+        await saveFile(svgBlob, filename, 'SVG Image', 'image/svg+xml');
         return;
     }
 
@@ -215,4 +207,92 @@ export async function exportToSvg(svgElement: SVGSVGElement, options: { backgrou
             alert('Failed to copy SVG. Please check permissions.');
         }
     }
+}
+
+/**
+ * Common Helper: Save Blob with "Save As" preference
+ * Tries:
+ * 1. chrome.downloads.download (Extension API) - enforces Save As dialog
+ * 2. window.showSaveFilePicker (File System Access API) - opens standard Save dialog
+ * 3. <a> tag download (Fallback)
+ */
+async function saveFile(blob: Blob, filename: string, typeDescription: string, mimeType: string) {
+    // 1. File System Access API (Modern Web - PREFERRED for no-download-UI)
+    if ('showSaveFilePicker' in window) {
+        try {
+            const pickerOptions: any = {
+                id: 'gorewrite-export', // specific ID to remember location
+                types: [{
+                    description: typeDescription,
+                    accept: { [mimeType]: ['.' + (filename ? filename.split('.').pop() : (mimeType.includes('png') ? 'png' : 'svg'))] }
+                }]
+            };
+            // Only set suggestedName if explicitly provided and not empty.
+            // If we omit it, browser might default to "Untitled" or blank depending on implementation.
+            if (filename) pickerOptions.suggestedName = filename;
+
+            // @ts-ignore
+            const handle = await window.showSaveFilePicker(pickerOptions);
+            // @ts-ignore
+            const writable = await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            console.log('Saved via FilePicker');
+            return; // Success
+        } catch (e) {
+            if ((e as Error).name === 'AbortError') {
+                console.log('User cancelled Save As');
+                return; // User cancelled
+            }
+            console.warn('FilePicker API failed/not supported, falling back to chrome.downloads...', e);
+            // Fallthrough to next method
+        }
+    }
+
+    // 2. Chrome Extension API (Requires 'downloads' permission)
+    if (typeof chrome !== 'undefined' && chrome.downloads && chrome.downloads.download) {
+        const url = URL.createObjectURL(blob);
+        try {
+            await new Promise<void>((resolve, reject) => {
+                const downloadOptions: any = {
+                    url: url,
+                    saveAs: true, // FORCE "Save As" dialog
+                    conflictAction: 'overwrite'
+                };
+                // Only set filename if provided (allows empty for Save As to manage)
+                if (filename) downloadOptions.filename = filename;
+
+                chrome.downloads.download(downloadOptions, (downloadId: number) => {
+                    if (chrome.runtime.lastError) {
+                        reject(chrome.runtime.lastError);
+                    } else {
+                        console.log(`Download started with ID: ${downloadId}`);
+                        resolve();
+                    }
+                });
+            });
+            URL.revokeObjectURL(url);
+            return; // Success
+        } catch (e: any) {
+            URL.revokeObjectURL(url);
+            // If user cancelled, just stop.
+            if (e && (e.message === 'I_USER_CANCELLED' || e.message.includes('cancel'))) {
+                console.log('User cancelled Save As');
+                return;
+            }
+            console.error('Chrome downloads API failed', e);
+            alert('保存できませんでした: ' + (e.message || e));
+            return; // Do NOT fallback to duplicate download
+        }
+    }
+
+    // 3. Fallback: Anchor Tag (Browser default behavior - only if above APIs not supported)
+    console.log('Falling back to <a> tag download');
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    if (filename) link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
 }

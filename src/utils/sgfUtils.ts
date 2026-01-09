@@ -411,21 +411,28 @@ export function parseSGFTree(sgfContent: string): ParsedSGFTree {
             }
 
             // Extract move from propBuffer
-            const bMatch = propBuffer.match(/B\[([a-zA-Z]{2})\]/);
-            const wMatch = propBuffer.match(/W\[([a-zA-Z]{2})\]/);
+            const bMatch = propBuffer.match(/B\[([a-zA-Z]*)\]/);
+            const wMatch = propBuffer.match(/W\[([a-zA-Z]*)\]/);
 
             if (bMatch) {
                 const coord = bMatch[1];
-                const x = fromSgfCoord(coord[0]);
-                const y = fromSgfCoord(coord[1]);
-                if (x >= 1 && x <= size && y >= 1 && y <= size) {
+                let x = 0, y = 0;
+                if (coord.length >= 2) {
+                    x = fromSgfCoord(coord[0]);
+                    y = fromSgfCoord(coord[1]);
+                }
+                // Pass if coord is empty (x=0, y=0)
+                if ((x === 0 && y === 0) || (x >= 1 && x <= size && y >= 1 && y <= size)) {
                     node.move = { x, y, color: 'BLACK' };
                 }
             } else if (wMatch) {
                 const coord = wMatch[1];
-                const x = fromSgfCoord(coord[0]);
-                const y = fromSgfCoord(coord[1]);
-                if (x >= 1 && x <= size && y >= 1 && y <= size) {
+                let x = 0, y = 0;
+                if (coord.length >= 2) {
+                    x = fromSgfCoord(coord[0]);
+                    y = fromSgfCoord(coord[1]);
+                }
+                if ((x === 0 && y === 0) || (x >= 1 && x <= size && y >= 1 && y <= size)) {
                     node.move = { x, y, color: 'WHITE' };
                 }
             }
