@@ -62,6 +62,9 @@ export interface GoBoardProps {
     nextNumber?: number;
     activeColor?: StoneColor;
     readOnly?: boolean;
+    // Branching Support
+    nextMoves?: { x: number, y: number, color: StoneColor, id: string }[];
+    onNextMoveClick?: (id: string) => void;
 }
 
 const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
@@ -85,7 +88,9 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
     hiddenMoves = [],
     specialLabels = [],
     markers = [],
-    readOnly = false
+    readOnly = false,
+    nextMoves = [],
+    onNextMoveClick
 }, ref) => {
     const CELL_SIZE = 40;
     const MARGIN = 40;
@@ -471,6 +476,37 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
 
             {cells}
             {markerElements}
+
+            {/* Ghost Stones for Branches */}
+            {!readOnly && nextMoves.map((move) => {
+                const cx = MARGIN + (move.x - 1) * CELL_SIZE;
+                const cy = MARGIN + (move.y - 1) * CELL_SIZE;
+                const isBlack = move.color === 'BLACK';
+
+                // Render a smaller, semi-transparent stone
+                return (
+                    <g
+                        key={`ghost-${move.id}`}
+                        className="cursor-pointer"
+                        onClick={(e) => {
+                            e.stopPropagation(); // Prevent onCellClick (new move)
+                            if (onNextMoveClick) onNextMoveClick(move.id);
+                        }}
+                    >
+                        <circle
+                            cx={cx} cy={cy}
+                            r={STONE_RADIUS * 0.6} // Created slightly smaller
+                            fill={isBlack ? "black" : "white"}
+                            stroke="black"
+                            strokeWidth={1}
+                            opacity={0.5}
+                        />
+                        {/* Optional: Add a small marker to indicate it's a branch? */}
+                        <circle cx={cx} cy={cy} r={3} fill={isBlack ? "white" : "black"} opacity={0.8} />
+                    </g>
+                );
+            })}
+
             {selectionRect}
 
             {/* Footer Text for Hidden Moves */}

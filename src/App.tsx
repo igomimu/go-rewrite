@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+﻿import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { flushSync } from 'react-dom'
 import GoBoard, { ViewRange, BoardState, StoneColor, Marker, Stone } from './components/GoBoard'
 import GameInfoModal from './components/GameInfoModal'
@@ -1930,25 +1930,32 @@ function App() {
 
     // Branch Candidates
     const branchCandidates = useMemo(() => {
-        const candidates: Marker[] = [];
-        // history is [Root, ..., Current]. Last element is current node.
-        const current = history[history.length - 1];
-        if (!current || !current.children || current.children.length === 0) return candidates;
+        // We return an array that satisfies both the "Menu Bar" (needs value/label) 
+        // and "GoBoard" (needs x, y, color, id) requirements.
+        const candidates: any[] = [];
 
-        // If we have children, they are candidates.
-        current.children.forEach((child, idx) => {
+        // Use currentState for consistency with tree logic
+        if (!currentState || !currentState.children || currentState.children.length === 0) return candidates;
+
+        currentState.children.forEach((child, idx) => {
             if (child.move) {
                 const label = String.fromCharCode(65 + idx); // A, B, C...
                 candidates.push({
                     x: child.move.x,
                     y: child.move.y,
                     type: 'LABEL',
-                    value: label
+                    value: label,
+                    color: child.move.color,
+                    id: child.id
                 });
             }
         });
         return candidates;
-    }, [history]);
+    }, [currentState]);
+
+    const handleBranchClick = (nodeId: string) => {
+        setCurrentNodeId(nodeId);
+    };
 
     return (
         <>
@@ -1970,7 +1977,7 @@ function App() {
                 {/* Print Area Removed (Moved Outside) */}
                 <div className="flex justify-between w-full items-center mb-2">
                     <div className="flex items-baseline gap-2">
-                        <span className="text-[10px] text-gray-400 font-normal pl-1">v39.1.7</span>
+                        v39.1.8
                     </div>
                     <div className="flex gap-2 items-center">
 
@@ -2238,6 +2245,8 @@ function App() {
                         nextNumber={nextNumber}
                         activeColor={activeColor}
                         markers={history[currentMoveIndex]?.markers || []}
+                        nextMoves={branchCandidates}
+                        onNextMoveClick={handleBranchClick}
                     />
 
                     {/* Float Controls: Zoom / Reset */}
@@ -2660,3 +2669,4 @@ function App() {
 }
 
 export default App
+
