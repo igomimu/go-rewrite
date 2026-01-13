@@ -60,6 +60,7 @@ function App() {
     const [isPrintJob, setIsPrintJob] = useState(false);
     const [nextLabelChar, setNextLabelChar] = useState<string>('A');
     const [selectedSymbol, setSelectedSymbol] = useState<SymbolType>('TRI');
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
     // -- Tree State --
     // We initialize a Root Node instead of a linear history array.
@@ -982,8 +983,8 @@ function App() {
         }
     }
 
-    // 2. Identify Collisions and Assign Labels
     const labels: { x: number, y: number, label: string }[] = [];
+    let labelIndex = 0;
     const footer: { left: { text: string, color: StoneColor }[], right: { text: string, color?: StoneColor, isLabel?: boolean } }[] = [];
     const stonesToDraw: { x: number, y: number, color: StoneColor, text: string }[] = [];
 
@@ -1018,33 +1019,73 @@ function App() {
             });
         } else {
             // Standard Logic: Handle ALL moves
-            const numberedMoves = moves.filter(m => m.number > 0);
+            const numberedMoves = moves.filter(m => m.number >= 0);
             numberedMoves.sort((a, b) => a.number - b.number);
 
             // 1. Identify Base Move (Visible on Board)
             if (numberedMoves.length > 0) {
-                const baseMove = numberedMoves[0]; // Earliest numbered move
-                // ALWAYS add Base Move to stonesToDraw
-                stonesToDraw.push({
-                    x: x + 1,
-                    y: y + 1,
-                    color: baseMove.color,
-                    text: getMoveText(baseMove.number)
-                });
+                // Check if Base is a Setup Stone (Number 0)
+                const isSetupBase = numberedMoves[0].number === 0;
 
-                // 2. Handle Later Moves -> Legend
-                if (numberedMoves.length > 1) {
+                // [Hybrid Logic]
+                // If collision exists (>1 move) AND base is Setup Stone:
+                // We must assign a label (A, B...) to the Setup Stone so we can reference it in Legend.
+                if (numberedMoves.length > 1 && isSetupBase) {
+                    const label = alphabet[labelIndex % alphabet.length];
+                    labelIndex++;
+
+                    // Mark on Board: Draw 'A' on top of the Setup Stone
+                    labels.push({ x: x + 1, y: y + 1, label });
+
+                    const baseMove = numberedMoves[0]; // Setup Stone
+
+                    // Handle Later Moves -> Legend
                     const laterMoves = numberedMoves.slice(1);
                     laterMoves.forEach(m => {
                         footer.push({
                             left: [{ text: getMoveText(m.number), color: m.color }],
                             right: {
-                                text: getMoveText(baseMove.number),
+                                text: label, // Reference by Label 'A'
                                 color: baseMove.color,
-                                isLabel: false
+                                isLabel: true // Treat as Label Text (not stone circle)
                             }
                         });
                     });
+
+                    // Add Base Move to stonesToDraw (The Setup Stone itself)
+                    stonesToDraw.push({
+                        x: x + 1,
+                        y: y + 1,
+                        color: baseMove.color,
+                        text: label // Set Label Text on the Overlay Stone
+                    });
+
+                } else {
+                    // Standard Logic (No Setup Collision OR Number-Number Collision)
+                    const baseMove = numberedMoves[0]; // Earliest numbered move
+
+                    // ALWAYS add Base Move to stonesToDraw
+                    stonesToDraw.push({
+                        x: x + 1,
+                        y: y + 1,
+                        color: baseMove.color,
+                        text: getMoveText(baseMove.number)
+                    });
+
+                    // 2. Handle Later Moves -> Legend
+                    if (numberedMoves.length > 1) {
+                        const laterMoves = numberedMoves.slice(1);
+                        laterMoves.forEach(m => {
+                            footer.push({
+                                left: [{ text: getMoveText(m.number), color: m.color }],
+                                right: {
+                                    text: getMoveText(baseMove.number),
+                                    color: baseMove.color,
+                                    isLabel: false
+                                }
+                            });
+                        });
+                    }
                 }
             }
 
@@ -1448,7 +1489,7 @@ function App() {
         } else {
             await exportToPng(clone, { scale: 3, backgroundColor: bgColor, destination: destination, filename });
         }
-    }, [hiddenMoves, stonesToDraw, showCoordinates, showCapturedInExport, isMonochrome]);
+    }, [hiddenMoves, stonesToDraw, showCoordinates, showCapturedInExport, isMonochrome, specialLabels]);
 
 
     const handleExport = useCallback(async (forcedMode?: 'SVG' | 'PNG', destination?: 'CLIPBOARD' | 'DOWNLOAD') => {
@@ -1470,12 +1511,9 @@ function App() {
         // Auto-Enable Figure Mode (Show Label A) for Export
         try {
             // MERGE: Captured Stones + Collision Restored Stones (for "Leave 5")
-            // We want collision stones to appear even if showCapturedInExport is false? 
-            // The User requirement "Leave 5" implies the board appearance changes to show 5.
-            // So collisionRestoredStones should always be included for graphical correctness of the diagram.
-            // But let's check if showCapturedInExport logic applies to them. Usually "hidden moves" logic is separate.
-            // Safest: Always include collision stones if we want the diagram to match the "Leave 5" intent.
-            const captured = showCapturedInExport ? getRestoredStones() : [];
+            // Requirement: "If placement is taken, it must not be erased".
+            // Therefore, we ALWAYS include restored stones in Export to produce a correct diagram.
+            const captured = getRestoredStones();
             const restored = captured;
 
             await performExport(fullBounds, restored, { isSvg, destination, filename });
@@ -1494,7 +1532,7 @@ function App() {
         const y2 = Math.max(selectionStart.y, selectionEnd.y);
 
         try {
-            const captured = showCapturedInExport ? getRestoredStones() : [];
+            const captured = getRestoredStones(); // Always included
             const restored = captured;
             await performExport({ minX: x1, maxX: x2, minY: y1, maxY: y2 }, restored, { isSvg: exportMode === 'SVG' });
         } catch (e) {
@@ -1977,7 +2015,7 @@ function App() {
                 {/* Print Area Removed (Moved Outside) */}
                 <div className="flex justify-between w-full items-center mb-2">
                     <div className="flex items-baseline gap-2">
-                        v39.1.8
+                        v39.1.12
                     </div>
                     <div className="flex gap-2 items-center">
 

@@ -134,9 +134,11 @@ export async function exportToSvg(svgElement: SVGSVGElement, options: { backgrou
     ignoredElements.forEach(el => el.remove());
 
     // 3. Get the crop aspect ratio / dimensions from viewBox
-    let width, height;
+    let width, height, minX = 0, minY = 0;
     if (clone.getAttribute('viewBox')) {
         const vb = clone.getAttribute('viewBox')!.split(' ').map(Number);
+        minX = vb[0];
+        minY = vb[1];
         width = vb[2];
         height = vb[3];
     } else {
@@ -154,10 +156,10 @@ export async function exportToSvg(svgElement: SVGSVGElement, options: { backgrou
     // clone.style.backgroundColor = backgroundColor; // unreliable in Word
 
     const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    bgRect.setAttribute("x", "0");
-    bgRect.setAttribute("y", "0");
-    bgRect.setAttribute("width", "100%");
-    bgRect.setAttribute("height", "100%");
+    bgRect.setAttribute("x", String(minX));
+    bgRect.setAttribute("y", String(minY));
+    bgRect.setAttribute("width", String(width));
+    bgRect.setAttribute("height", String(height));
     bgRect.setAttribute("fill", backgroundColor || "#FFFFFF"); // Default to White if empty
 
     // Insert as first child
