@@ -238,7 +238,15 @@ export async function exportToSvg(svgElement: SVGSVGElement, options: { backgrou
     }
 
     // Word sometimes remaps named colors on re-open; force explicit hex values.
+    // Word sometimes remaps named colors on re-open; force explicit hex values.
     normalizeSvgColors(clone);
+
+    // SVG Cleanup: Remove all class attributes to prevent external CSS dependencies
+    // This is CRITICAL for Word compatibility as it ignores external stylesheets
+    // and can have undefined behavior with unstyled classes.
+    const allElements = clone.querySelectorAll('*');
+    allElements.forEach(el => el.removeAttribute('class'));
+    clone.removeAttribute('class'); // Remove from root too
 
     // 6. Serialize
     const serializer = new XMLSerializer();
@@ -250,10 +258,11 @@ export async function exportToSvg(svgElement: SVGSVGElement, options: { backgrou
         return;
     }
 
-    // Copy to Clipboard (Hybrid: SVG Image + Text + PNG Fallback)
+    // Copy to Clipboard (Hybrid: SVG Image + PNG Fallback, NO TEXT)
+    // Note: Removing text/plain helps Word treat it purely as an image
     try {
-        const textBlob = new Blob([svgString], { type: 'text/plain' });
         const svgBlob = new Blob([svgString], { type: 'image/svg+xml' });
+        // const textBlob = new Blob([svgString], { type: 'text/plain' }); // REMOVED
 
         // Generate PNG (Level 3 scale for high quality)
         const pngBlob = await svgToPngBlob(clone, width, height, 3, backgroundColor);
@@ -263,12 +272,12 @@ export async function exportToSvg(svgElement: SVGSVGElement, options: { backgrou
 
         await navigator.clipboard.write([
             new ClipboardItem({
-                'text/plain': textBlob,
+                // 'text/plain': textBlob,
                 'image/svg+xml': svgBlob,
                 'image/png': pngBlob // Fallback for Chrome/Slack/etc
             })
         ]);
-        console.log('SVG content copied to clipboard (SVG+Text+PNG).');
+        console.log('SVG content copied to clipboard (SVG+PNG).');
     } catch (error) {
         console.error('Failed to copy SVG to clipboard:', error);
         // Fallback to text only if the complex write fails
