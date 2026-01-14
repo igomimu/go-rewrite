@@ -488,6 +488,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                 return (
                     <g
                         key={`ghost-${move.id}`}
+                        data-export-ignore="true"
                         className="cursor-pointer"
                         onClick={(e) => {
                             e.stopPropagation(); // Prevent onCellClick (new move)
