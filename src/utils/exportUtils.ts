@@ -195,12 +195,12 @@ export async function exportToSvg(svgElement: SVGSVGElement, options: { backgrou
         return;
     }
 
-    // Copy to Clipboard (Hybrid: SVG Image + Text + PNG Fallback)
+    // Copy to Clipboard (PNG ONLY for Word compatibility)
+    // Note: image/svg+xml causes Word to lose background after save/reopen
     try {
-        const svgBlob = new Blob([svgString], { type: 'image/svg+xml' });
         const textBlob = new Blob([svgString], { type: 'text/plain' });
 
-        // Generate PNG Fallback (Level 3 scale for high quality)
+        // Generate PNG (Level 3 scale for high quality)
         const pngBlob = await svgToPngBlob(clone, width, height, 3, backgroundColor);
 
         // Ensure focus for Clipboard API
@@ -209,11 +209,11 @@ export async function exportToSvg(svgElement: SVGSVGElement, options: { backgrou
         await navigator.clipboard.write([
             new ClipboardItem({
                 'text/plain': textBlob,
-                'image/svg+xml': svgBlob,
-                'image/png': pngBlob // Fallback for Chrome/Slack/etc
+                // 'image/svg+xml': svgBlob,  // REMOVED: Causes black background in Word after save
+                'image/png': pngBlob // Primary format for maximum compatibility
             })
         ]);
-        console.log('SVG content copied to clipboard (Image+Text+PNG).');
+        console.log('SVG content copied to clipboard (Text+PNG).');
     } catch (error) {
         console.error('Failed to copy SVG to clipboard:', error);
         // Fallback to text only if the complex write fails
