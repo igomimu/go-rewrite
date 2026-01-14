@@ -217,18 +217,32 @@ export async function exportToSvg(svgElement: SVGSVGElement, options: { backgrou
     // 5. Set background color (Explicit Rect for Word compatibility)
     // clone.style.backgroundColor = backgroundColor; // unreliable in Word
 
+    // SVG Cleanup: Remove all class attributes and style tags
+    const allElements = clone.querySelectorAll('*');
+    allElements.forEach(el => el.removeAttribute('class'));
+    clone.removeAttribute('class');
+    const styleTags = clone.querySelectorAll('style');
+    styleTags.forEach(el => el.remove());
+
+    // Fix Background Color for Word:
+    // Word treats pure #FFFFFF as "transparent" sometimes. Use #FEFEFE (Off-white) to force rendering.
+    let finalBgColor = backgroundColor || "#FEFEFE";
+    if (finalBgColor.toLowerCase() === '#ffffff' || finalBgColor.toLowerCase() === 'white') {
+        finalBgColor = '#FEFEFE';
+    }
+
     const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
     bgRect.setAttribute("x", String(minX));
     bgRect.setAttribute("y", String(minY));
     bgRect.setAttribute("width", String(width));
     bgRect.setAttribute("height", String(height));
-    bgRect.setAttribute("fill", backgroundColor || "#FFFFFF");
+    bgRect.setAttribute("fill", finalBgColor);
     // Word Compatibility: Explicit inline styles
-    bgRect.style.fill = backgroundColor || "#FFFFFF";
+    bgRect.style.fill = finalBgColor;
     bgRect.style.stroke = "none";
 
     // Word Compatibility: Set background on root (sometimes helps)
-    clone.style.backgroundColor = backgroundColor || "#FFFFFF";
+    clone.style.backgroundColor = finalBgColor;
 
     // Insert as first child
     if (clone.firstChild) {
@@ -238,15 +252,7 @@ export async function exportToSvg(svgElement: SVGSVGElement, options: { backgrou
     }
 
     // Word sometimes remaps named colors on re-open; force explicit hex values.
-    // Word sometimes remaps named colors on re-open; force explicit hex values.
     normalizeSvgColors(clone);
-
-    // SVG Cleanup: Remove all class attributes to prevent external CSS dependencies
-    // This is CRITICAL for Word compatibility as it ignores external stylesheets
-    // and can have undefined behavior with unstyled classes.
-    const allElements = clone.querySelectorAll('*');
-    allElements.forEach(el => el.removeAttribute('class'));
-    clone.removeAttribute('class'); // Remove from root too
 
     // 6. Serialize
     const serializer = new XMLSerializer();
