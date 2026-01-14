@@ -1,5 +1,48 @@
 declare const chrome: any;
 
+const COLOR_NAME_MAP: Record<string, string> = {
+    black: '#000000',
+    white: '#FFFFFF',
+    '#000': '#000000',
+    '#fff': '#FFFFFF',
+};
+
+function normalizeColorValue(value: string): string | null {
+    const trimmed = value.trim();
+    const lower = trimmed.toLowerCase();
+    return COLOR_NAME_MAP[lower] || null;
+}
+
+function normalizeSvgColors(svgElement: SVGSVGElement): void {
+    const attributesToNormalize = ['fill', 'stroke', 'color', 'stop-color'];
+    const elements = svgElement.querySelectorAll('*');
+
+    elements.forEach(el => {
+        attributesToNormalize.forEach(attr => {
+            const value = el.getAttribute(attr);
+            if (!value) return;
+            const normalized = normalizeColorValue(value);
+            if (normalized) {
+                el.setAttribute(attr, normalized);
+            }
+        });
+
+        const style = el.getAttribute('style');
+        if (style) {
+            const updated = style.replace(
+                /\b(fill|stroke|color)\s*:\s*(black|white)\b/gi,
+                (_match, prop, color) => {
+                    const normalized = normalizeColorValue(color);
+                    return normalized ? `${prop}: ${normalized}` : _match;
+                }
+            );
+            if (updated !== style) {
+                el.setAttribute('style', updated);
+            }
+        }
+    });
+}
+
 
 /**
  * Exports an SVG element to the system clipboard as a PNG image.
@@ -65,6 +108,9 @@ export async function exportToPng(svgElement: SVGSVGElement, options: { scale?: 
     } else {
         clone.appendChild(bgRect);
     }
+
+    // Word sometimes remaps named colors on re-open; force explicit hex values.
+    normalizeSvgColors(clone);
 
     // 6. Generate PNG Blob (Shared Logic)
     try {
@@ -190,6 +236,9 @@ export async function exportToSvg(svgElement: SVGSVGElement, options: { backgrou
     } else {
         clone.appendChild(bgRect);
     }
+
+    // Word sometimes remaps named colors on re-open; force explicit hex values.
+    normalizeSvgColors(clone);
 
     // 6. Serialize
     const serializer = new XMLSerializer();
