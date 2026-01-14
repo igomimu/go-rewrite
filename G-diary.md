@@ -125,4 +125,5 @@
         - **Public Version**: `v1.5.0` (manifest.json, package.json)
         - **Dev Version**: `v39.1.13` (Internal tracking)
         - **Dynamic Display**: `chrome.management.getSelf` APIを利用し、インストールタイプが `development` の場合のみ `Dev v39...` を表示、それ以外（ストア版）は `v1.5.0` を表示するように実装しました。
+        - **Dev Environment**: 拡張機能管理画面での混同を防ぐため、開発版の `manifest.json` の名前を `GORewrite (Dev)` に変更しました（リリース時は自動で戻ります）。
 
