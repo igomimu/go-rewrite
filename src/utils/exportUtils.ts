@@ -47,8 +47,24 @@ export async function exportToPng(svgElement: SVGSVGElement, options: { scale?: 
     clone.setAttribute('width', `${width}px`);
     clone.setAttribute('height', `${height}px`);
 
-    // 5. Handle Background Color
-    clone.style.backgroundColor = backgroundColor;
+    // 5. Handle Background Color (Explicit SVG Rect - same as exportToSvg)
+    // Note: CSS backgroundColor is unreliable when serializing SVG to image
+    const vb = clone.getAttribute('viewBox')!.split(' ').map(Number);
+    const [minX, minY, vbWidth, vbHeight] = vb;
+
+    const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    bgRect.setAttribute("x", String(minX));
+    bgRect.setAttribute("y", String(minY));
+    bgRect.setAttribute("width", String(vbWidth));
+    bgRect.setAttribute("height", String(vbHeight));
+    bgRect.setAttribute("fill", backgroundColor);
+
+    // Insert as first child to be behind all content
+    if (clone.firstChild) {
+        clone.insertBefore(bgRect, clone.firstChild);
+    } else {
+        clone.appendChild(bgRect);
+    }
 
     // 6. Generate PNG Blob (Shared Logic)
     try {

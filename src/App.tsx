@@ -1482,7 +1482,27 @@ function App() {
         clone.setAttribute('width', `${finalW}`);
         clone.setAttribute('height', `${finalH}`);
 
-        clone.setAttribute('height', `${finalH}`);
+        // ★ CRITICAL FIX: Insert background rect AFTER viewBox change, BEFORE export
+        // This ensures the background covers the EXACT area of the new viewBox
+        // Previous bug: GoBoard's original bgRect used old viewBox coordinates
+        const existingBgRects = clone.querySelectorAll('rect[data-goboard-background]');
+        existingBgRects.forEach(r => r.remove()); // Remove any marked bg rects
+
+
+        const bgRectForExport = document.createElementNS(svgNS, "rect");
+        bgRectForExport.setAttribute("x", String(finalX));
+        bgRectForExport.setAttribute("y", String(finalY));
+        bgRectForExport.setAttribute("width", String(finalW));
+        bgRectForExport.setAttribute("height", String(finalH));
+        bgRectForExport.setAttribute("fill", bgColor);
+        bgRectForExport.setAttribute("data-export-background", "true"); // Mark for identification
+
+        // Insert as FIRST child to be behind all content
+        if (clone.firstChild) {
+            clone.insertBefore(bgRectForExport, clone.firstChild);
+        } else {
+            clone.appendChild(bgRectForExport);
+        }
 
         if (isSvg) {
             await exportToSvg(clone, { backgroundColor: bgColor, destination: destination, filename: filename });
