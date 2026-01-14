@@ -450,6 +450,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
 
             {/* Background Rect for Printing robustness */}
             <rect
+                data-export-ignore="true"
                 x={viewBoxData.x}
                 y={viewBoxData.y}
                 width={viewBoxData.w}
