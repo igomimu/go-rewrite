@@ -7,6 +7,7 @@ import { exportToPng, exportToSvg } from './utils/exportUtilsLegacy'
 import { checkCaptures } from './utils/gameLogic'
 import { parseSGFTree, generateSGFTree, SgfTreeNode } from './utils/sgfUtils'
 import { generatePrintFigures } from './utils/printUtils'
+import { APP_VERSION, DEV_VERSION } from './constants'
 
 // Chrome extension download API (type stub)
 declare const chrome: any;
@@ -100,6 +101,22 @@ function App() {
     });
 
     const [showCapturedInExport, setShowCapturedInExport] = useState(false);
+
+    // Version Display Logic
+    const [displayVersion, setDisplayVersion] = useState(`v${APP_VERSION}`);
+    const [isDevMode, setIsDevMode] = useState(false);
+
+    useEffect(() => {
+        // Check if we are in development mode
+        if (chrome?.management?.getSelf) {
+            chrome.management.getSelf((info: any) => {
+                if (info?.installType === 'development') {
+                    setDisplayVersion(`Dev ${DEV_VERSION}`);
+                    setIsDevMode(true);
+                }
+            });
+        }
+    }, []);
 
 
     useEffect(() => { localStorage.setItem('gorw_is_monochrome', String(isMonochrome)); }, [isMonochrome]);
@@ -2012,8 +2029,8 @@ function App() {
 
                 {/* Print Area Removed (Moved Outside) */}
                 <div className="flex justify-between w-full items-center mb-2">
-                    <div className="flex items-baseline gap-2">
-                        v1.5
+                    <div className="flex items-baseline gap-2" title={isDevMode ? `Public: v${APP_VERSION}` : `Internal: ${DEV_VERSION}`}>
+                        {displayVersion}
                     </div>
                     <div className="flex gap-2 items-center">
 

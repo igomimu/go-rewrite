@@ -119,3 +119,10 @@
         - エクスポート画像において、ラベル（"A"等）が石の描画順序により隠れてしまう問題を修正しました（オーバーレイ石に直接テキストを指定）。
         - これにより、凡例と盤上の石の双方で「A」などのラベルが正しく同期して表示されます。
 
+- **2026-01-15**:
+    - **[Fix] Version Unification (v1.5.0 / v39.1.13)**:
+        - 混乱していたバージョン表記を統一しました。
+        - **Public Version**: `v1.5.0` (manifest.json, package.json)
+        - **Dev Version**: `v39.1.13` (Internal tracking)
+        - **Dynamic Display**: `chrome.management.getSelf` APIを利用し、インストールタイプが `development` の場合のみ `Dev v39...` を表示、それ以外（ストア版）は `v1.5.0` を表示するように実装しました。
+
