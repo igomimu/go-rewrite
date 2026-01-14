@@ -2013,7 +2013,7 @@ function App() {
                 {/* Print Area Removed (Moved Outside) */}
                 <div className="flex justify-between w-full items-center mb-2">
                     <div className="flex items-baseline gap-2">
-                        v1.4
+                        v1.5
                     </div>
                     <div className="flex gap-2 items-center">
 
