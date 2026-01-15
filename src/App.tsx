@@ -8,6 +8,7 @@ import { checkCaptures } from './utils/gameLogic'
 import { parseSGFTree, generateSGFTree, SgfTreeNode } from './utils/sgfUtils'
 import { generatePrintFigures } from './utils/printUtils'
 import { APP_VERSION, DEV_VERSION } from './constants'
+import { useTranslation, Language, languageNames } from './i18n'
 
 // Chrome extension download API (type stub)
 declare const chrome: any;
@@ -44,6 +45,7 @@ export interface HistoryState {
 import { createNode, getPath, addMove, GameNode, recalculateBoards } from './utils/treeUtilsV2'
 
 function App() {
+    const { t, language, setLanguage } = useTranslation();
     // Initial Size 19
     const INITIAL_SIZE = 19;
 
@@ -2022,7 +2024,7 @@ function App() {
                 {isDragging && (
                     <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-blue-100 bg-opacity-50">
                         <div className="text-4xl font-bold text-blue-600 bg-white p-8 rounded-xl shadow-lg border-4 border-blue-400">
-                            Drop SGF File Here
+                            {t('ui.dropFileHere')}
                         </div>
                     </div>
                 )}
@@ -2047,25 +2049,25 @@ function App() {
 
                         {/* Group 1: File Operations */}
                         <div className="flex bg-gray-100 rounded-lg p-0.5 gap-0.5">
-                            <button onClick={clearBoard} title="New / Clear (Alt+N)" className="w-6 h-6 rounded-md bg-white hover:bg-red-50 text-red-600 flex items-center justify-center font-bold transition-all text-sm shadow-sm">
+                            <button onClick={clearBoard} title={t('tooltip.new')} className="w-6 h-6 rounded-md bg-white hover:bg-red-50 text-red-600 flex items-center justify-center font-bold transition-all text-sm shadow-sm">
                                 🗑️
                             </button>
-                            <button onClick={handleOpenSGF} title="Open SGF (Ctrl+O)" className="w-6 h-6 rounded-md bg-white hover:bg-blue-50 text-blue-600 flex items-center justify-center font-bold transition-all text-sm shadow-sm">
+                            <button onClick={handleOpenSGF} title={t('tooltip.open')} className="w-6 h-6 rounded-md bg-white hover:bg-blue-50 text-blue-600 flex items-center justify-center font-bold transition-all text-sm shadow-sm">
                                 📂
                             </button>
-                            <button onClick={handleOverwriteSave} title="Overwrite Save (Save)" className="w-6 h-6 rounded-md bg-white hover:bg-green-50 text-green-700 flex items-center justify-center font-bold transition-all text-sm shadow-sm">
+                            <button onClick={handleOverwriteSave} title={t('tooltip.save')} className="w-6 h-6 rounded-md bg-white hover:bg-green-50 text-green-700 flex items-center justify-center font-bold transition-all text-sm shadow-sm">
                                 💾
                             </button>
-                            <button onClick={handleSaveSGF} title="Save As... (Ctrl+S)" className="w-6 h-6 rounded-md bg-white hover:bg-orange-50 text-orange-600 flex items-center justify-center font-bold transition-all shadow-sm">
+                            <button onClick={handleSaveSGF} title={t('tooltip.saveAs')} className="w-6 h-6 rounded-md bg-white hover:bg-orange-50 text-orange-600 flex items-center justify-center font-bold transition-all shadow-sm">
                                 <img src="/icons/save_as_v2.png" alt="Save As" className="w-4 h-4 object-contain opacity-80" />
                             </button>
-                            <button onClick={handlePasteSGF} title="Paste SGF from Clipboard" className="w-6 h-6 rounded-md bg-white hover:bg-blue-50 text-blue-600 flex items-center justify-center font-bold transition-all text-sm shadow-sm">
+                            <button onClick={handlePasteSGF} title={t('tooltip.paste')} className="w-6 h-6 rounded-md bg-white hover:bg-blue-50 text-blue-600 flex items-center justify-center font-bold transition-all text-sm shadow-sm">
                                 📋
                             </button>
                             <button
                                 onClick={() => setShowGameInfoModal(true)}
                                 className="w-6 h-6 rounded-md bg-blue-500 text-white hover:bg-blue-600 flex items-center justify-center font-bold transition-all text-sm shadow-sm"
-                                title="対局情報"
+                                title={t('tooltip.gameInfo')}
                             >
                                 i
                             </button>
@@ -2082,26 +2084,26 @@ function App() {
                                     setShowPrintModal(true);
                                 }}
                                 className="w-6 h-6 rounded-md bg-white hover:bg-gray-50 text-gray-600 flex items-center justify-center font-bold text-sm transition-all shadow-sm"
-                                title="Print (Ctrl+P)"
+                                title={t('tooltip.print')}
                             >
                                 🖨️
                             </button>
 
                             <button
                                 onClick={() => setShowCapturedInExport(!showCapturedInExport)}
-                                title={`Show Captured Stones in Export: ${showCapturedInExport ? 'ON' : 'OFF'}`}
+                                title={t('tooltip.showCaptured', { status: showCapturedInExport ? t('ui.on') : t('ui.off') })}
                                 className={`w-6 h-6 rounded-md flex items-center justify-center font-bold transition-all text-sm shadow-sm ${showCapturedInExport ? 'bg-purple-100 text-purple-700 ring-1 ring-purple-300' : 'bg-white text-gray-400 hover:text-purple-500'}`}
                             >
                                 👻
                             </button>
                             <button
                                 onClick={() => setShowNumbers(!showNumbers)}
-                                title={`Toggle Numbers: ${showNumbers ? 'ON' : 'OFF'}`}
+                                title={t('tooltip.showNumbers', { status: showNumbers ? t('ui.on') : t('ui.off') })}
                                 className={`w-6 h-6 rounded-md flex items-center justify-center font-bold transition-all text-sm shadow-sm ${showNumbers ? 'bg-cyan-100 text-cyan-700 ring-1 ring-cyan-300' : 'bg-white text-gray-400 hover:text-cyan-500'}`}
                             >
-                                ⑧
+                                ⑨
                             </button>
-                            <button onClick={handlePass} disabled={mode !== 'NUMBERED'} title="Pass"
+                            <button onClick={handlePass} disabled={mode !== 'NUMBERED'} title={t('tooltip.pass')}
                                 className="w-6 h-6 rounded-md bg-gray-200 hover:bg-gray-300 disabled:opacity-50 font-bold flex items-center justify-center text-sm shadow-sm text-gray-700">
                                 ✋
                             </button>
@@ -2110,18 +2112,18 @@ function App() {
                         {/* Group 4: Export */}
                         <div className="flex bg-indigo-50 rounded-lg items-center px-0.5 py-0.5 border border-indigo-100 gap-0.5">
                             <button onClick={() => { if (selectionStart && selectionEnd) handleExportSelection(); else handleExport(); }}
-                                title={`Copy as ${exportMode} (Click to Copy)`} className="w-6 h-6 rounded-md bg-white text-indigo-600 hover:bg-indigo-50 flex items-center justify-center font-bold transition-all text-sm shadow-sm">
+                                title={t('tooltip.copyAs', { format: exportMode })} className="w-6 h-6 rounded-md bg-white text-indigo-600 hover:bg-indigo-50 flex items-center justify-center font-bold transition-all text-sm shadow-sm">
                                 📷
                             </button>
                             <button
                                 onClick={() => handleExport('PNG', 'DOWNLOAD')}
-                                title="Save as PNG..."
+                                title={t('tooltip.savePng')}
                                 className="w-6 h-6 rounded-md bg-white text-indigo-600 hover:bg-indigo-50 flex items-center justify-center font-bold transition-all text-sm shadow-sm"
                             >
                                 ⬇️
                             </button>
                             <button
-                                title="Toggle Export Format (SVG/PNG)"
+                                title={t('tooltip.toggleFormat')}
                                 onClick={() => {
                                     const next = exportMode === 'SVG' ? 'PNG' : 'SVG';
                                     setExportMode(next);
@@ -2135,17 +2137,29 @@ function App() {
 
                         {/* Group 5: System */}
                         <div className="flex items-center gap-1 pl-1">
+                            {/* Language Switcher */}
+                            <button
+                                onClick={() => {
+                                    const langs: Language[] = ['ja', 'en', 'zh'];
+                                    const nextIdx = (langs.indexOf(language) + 1) % langs.length;
+                                    setLanguage(langs[nextIdx]);
+                                }}
+                                className="h-6 px-1.5 rounded-md bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-600 flex items-center justify-center font-bold text-[10px] transition-all border border-gray-200"
+                                title={`Language: ${languageNames[language]}`}
+                            >
+                                {language.toUpperCase()}
+                            </button>
                             <button
                                 onClick={() => window.open('index.html', '_blank')}
                                 className="w-6 h-6 rounded-md bg-gray-100 text-gray-500 hover:bg-gray-200 flex items-center justify-center font-bold text-[10px] transition-all"
-                                title="新しいタブで開く (最大化)"
+                                title={t('tooltip.openNewTab')}
                             >
                                 ↗
                             </button>
                             <button
                                 onClick={() => setShowHelp(true)}
                                 className="w-6 h-6 rounded-md bg-gray-100 text-gray-500 hover:bg-gray-200 flex items-center justify-center font-bold text-xs transition-all"
-                                title="ヘルプ"
+                                title={t('tooltip.help')}
                             >
                                 ?
                             </button>
@@ -2163,53 +2177,46 @@ function App() {
                             >
                                 ×
                             </button>
-                            <h2 className="text-lg font-bold mb-4 text-gray-800 border-b pb-2">ショートカット & ヘルプ</h2>
+                            <h2 className="text-lg font-bold mb-4 text-gray-800 border-b pb-2">{t('help.title')}</h2>
                             <div className="space-y-3 text-sm text-gray-700">
                                 <div className="flex items-center gap-3">
                                     <div className="w-6 text-center text-xl">🖱️</div>
                                     <div>
-                                        <div className="font-bold">クリック / 右クリック</div>
-                                        <div className="text-xs text-gray-500">石を置く / 削除</div>
+                                        <div className="font-bold">{t('help.clickRightClick')}</div>
+                                        <div className="text-xs text-gray-500">{t('help.clickDesc')}</div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <div className="w-6 text-center text-xl">🖱️</div>
                                     <div>
-                                        <div className="font-bold">ドラッグ</div>
-                                        <div className="text-xs text-gray-500">範囲選択 (切り抜き) / 石の移動</div>
+                                        <div className="font-bold">{t('help.drag')}</div>
+                                        <div className="text-xs text-gray-500">{t('help.dragDesc')}</div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <div className="w-6 text-center text-xl">⚙️</div>
                                     <div>
-                                        <div className="font-bold">ホイール</div>
-                                        <div className="text-xs text-gray-500">アンドゥ(戻る) / リドゥ(進む)</div>
+                                        <div className="font-bold">{t('help.wheel')}</div>
+                                        <div className="text-xs text-gray-500">{t('help.wheelDesc')}</div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <div className="w-6 text-center text-xs font-mono border rounded bg-gray-100">Ctrl+F</div>
                                     <div>
-                                        <div className="font-bold">コピー</div>
-                                        <div className="text-xs text-gray-500">画像をクリップボードに保存</div>
+                                        <div className="font-bold">{t('help.copy')}</div>
+                                        <div className="text-xs text-gray-500">{t('help.copyDesc')}</div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <div className="w-6 text-center text-xs font-mono border rounded bg-gray-100">Ctrl+V</div>
                                     <div>
-                                        <div className="font-bold">SGF貼り付け</div>
-                                        <div className="text-xs text-gray-500">クリップボードから棋譜を読み込み</div>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-6 text-center text-xs font-mono border rounded bg-gray-100">Esc</div>
-                                    <div>
-                                        <div className="font-bold">キャンセル</div>
-                                        <div className="text-xs text-gray-500">選択解除 / ヘルプを閉じる</div>
+                                        <div className="font-bold">{t('help.sgfPaste')}</div>
+                                        <div className="text-xs text-gray-500">{t('help.sgfPasteDesc')}</div>
                                     </div>
                                 </div>
                             </div>
                             <div className="mt-6 text-center text-xs text-gray-400">
-                                GORewrite v37.3
+                                GORewrite {displayVersion}
                             </div>
                         </div>
                     </div>
@@ -2263,9 +2270,9 @@ function App() {
                             ? 'bg-gray-800 text-white border-gray-800'
                             : 'bg-yellow-100 text-yellow-800 border-yellow-300 hover:bg-yellow-200'
                             }`}
-                        title="Toggle Monochrome (Printer Friendly)"
+                        title={t('tooltip.monochrome')}
                     >
-                        {isMonochrome ? '白黒' : 'カラー'}
+                        {isMonochrome ? t('ui.monochrome') : t('ui.color')}
                     </button>
                 </div>
 
@@ -2310,14 +2317,14 @@ function App() {
                                 <button
                                     onClick={(e) => { e.stopPropagation(); handleExportSelection(); }}
                                     className="bg-green-600 text-white text-xs font-bold px-3 py-1 rounded shadow hover:bg-green-700 transition-all flex items-center gap-1"
-                                    title="Copy Selection (Scissors)"
+                                    title={t('tooltip.copySelection')}
                                 >
                                     <span>✂️</span> Copy
                                 </button>
                                 <button
                                     onClick={(e) => { e.stopPropagation(); handleZoomToSelection(); }}
                                     className="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded shadow hover:bg-blue-700 transition-all flex items-center gap-1"
-                                    title="Crop to Selection"
+                                    title={t('tooltip.cropSelection')}
                                 >
                                     <span>🔍</span> Zoom
                                 </button>
@@ -2329,7 +2336,7 @@ function App() {
                             <button
                                 onClick={(e) => { e.stopPropagation(); setViewRange(null); }}
                                 className="bg-gray-700 text-white text-xs font-bold px-3 py-1 rounded shadow hover:bg-gray-800 transition-all flex items-center gap-1 opacity-80 hover:opacity-100"
-                                title="Reset View (Esc)"
+                                title={t('tooltip.resetView')}
                             >
                                 <span>↺</span> Reset
                             </button>
@@ -2344,7 +2351,7 @@ function App() {
                     <div className="flex justify-center items-center space-x-1 border-b pb-2 flex-wrap gap-y-2">
                         {/* Black Stone (Simple) */}
                         <button
-                            title="Place Black Stone (Simple Mode)"
+                            title={t('tooltip.placeBlack')}
                             className={`p-1 rounded-full transition-all ${mode === 'SIMPLE' && activeColor === 'BLACK' ? 'bg-blue-100 ring-2 ring-blue-500 scale-110' : 'hover:bg-gray-100 opacity-60 hover:opacity-100'}`}
                             onClick={() => {
                                 setMode('SIMPLE');
@@ -2361,7 +2368,7 @@ function App() {
 
                         {/* White Stone (Simple) */}
                         <button
-                            title="Place White Stone (Simple Mode)"
+                            title={t('tooltip.placeWhite')}
                             className={`p-1 rounded-full transition-all ${mode === 'SIMPLE' && activeColor === 'WHITE' ? 'bg-blue-100 ring-2 ring-blue-500 scale-110' : 'hover:bg-gray-100 opacity-60 hover:opacity-100'}`}
                             onClick={() => {
                                 setMode('SIMPLE');
@@ -2378,7 +2385,7 @@ function App() {
 
                         {/* Numbered Stone */}
                         <button
-                            title={`Numbered Mode (Click again to toggle color: ${activeColor})`}
+                            title={t('tooltip.numberedMode', { color: activeColor === 'BLACK' ? t('ui.black') : t('ui.white') })}
                             className={`p-1 rounded-full transition-all ${mode === 'NUMBERED' ? 'bg-blue-100 ring-2 ring-blue-500 scale-110' : 'hover:bg-gray-100 opacity-60 hover:opacity-100'}`}
                             onClick={() => {
                                 if (mode === 'NUMBERED') {
@@ -2413,7 +2420,7 @@ function App() {
                         {/* Combined A / Symbol Tool */}
                         <div className="flex items-center">
                             <button
-                                title="Label Mode (A, B, C...)"
+                                title={t('tooltip.labelMode')}
                                 onClick={() => setToolMode('LABEL')}
                                 className={`w-8 h-8 font-bold border rounded-l flex items-center justify-center transition-all ${toolMode === 'LABEL' ? 'bg-blue-100 border-blue-500 text-blue-700 z-10' : 'bg-white border-gray-300 hover:bg-gray-100'}`}
                             >
@@ -2421,7 +2428,7 @@ function App() {
                             </button>
                             <div className="relative">
                                 <select
-                                    title="Symbol Mode"
+                                    title={t('tooltip.symbolMode')}
                                     value={toolMode === 'SYMBOL' ? selectedSymbol : ''}
                                     onChange={(e) => {
                                         const val = e.target.value as SymbolType;
@@ -2451,30 +2458,30 @@ function App() {
 
                         {/* Navigation Group (Moved here form Top) */}
                         <div className="flex bg-gray-100 rounded p-0.5 gap-0.5 items-center">
-                            <button onClick={deleteLastMove} disabled={currentMoveIndex === 0} title="Delete Last Move (Delete/Ctrl+Z)"
+                            <button onClick={deleteLastMove} disabled={currentMoveIndex === 0} title={t('tooltip.deleteMove')}
                                 className="w-7 h-7 rounded bg-white hover:bg-red-50 text-red-700 disabled:opacity-50 disabled:bg-gray-50 flex items-center justify-center font-bold text-sm transition-all shadow-sm border border-gray-200 mr-1">
                                 ⌫
                             </button>
-                            <button onClick={restoreMove} disabled={currentState.children.length === 0} title="Restore Deleted Move (Ctrl+Y)"
+                            <button onClick={restoreMove} disabled={currentState.children.length === 0} title={t('tooltip.restoreMove')}
                                 className="w-7 h-7 rounded bg-white hover:bg-blue-50 text-blue-700 disabled:opacity-50 disabled:bg-gray-50 flex items-center justify-center font-bold text-sm transition-all shadow-sm border border-gray-200 mr-2">
                                 ↻
                             </button>
-                            <button onClick={stepFirst} disabled={currentMoveIndex === 0} title="First Move (Home)" className="w-7 h-7 rounded bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-xs shadow-sm border border-gray-200">
+                            <button onClick={stepFirst} disabled={currentMoveIndex === 0} title={t('tooltip.firstMove')} className="w-7 h-7 rounded bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-xs shadow-sm border border-gray-200">
                                 |&lt;
                             </button>
-                            <button onClick={stepBack10} disabled={currentMoveIndex === 0} title="Back 10 Moves" className="w-7 h-7 rounded bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-xs shadow-sm border border-gray-200">
+                            <button onClick={stepBack10} disabled={currentMoveIndex === 0} title={t('tooltip.back10')} className="w-7 h-7 rounded bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-xs shadow-sm border border-gray-200">
                                 &lt;&lt;
                             </button>
-                            <button onClick={stepBack} disabled={currentMoveIndex === 0} title="Back (Wheel Up)" className="w-7 h-7 rounded bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-sm shadow-sm border border-gray-200">
+                            <button onClick={stepBack} disabled={currentMoveIndex === 0} title={t('tooltip.back')} className="w-7 h-7 rounded bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-sm shadow-sm border border-gray-200">
                                 &lt;
                             </button>
-                            <button onClick={stepForward} disabled={currentState.children.length === 0} title="Forward (Wheel Down)" className="w-7 h-7 rounded bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-sm shadow-sm border border-gray-200">
+                            <button onClick={stepForward} disabled={currentState.children.length === 0} title={t('tooltip.forward')} className="w-7 h-7 rounded bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-sm shadow-sm border border-gray-200">
                                 &gt;
                             </button>
-                            <button onClick={stepForward10} disabled={currentState.children.length === 0} title="Forward 10 Moves" className="w-7 h-7 rounded bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-xs shadow-sm border border-gray-200">
+                            <button onClick={stepForward10} disabled={currentState.children.length === 0} title={t('tooltip.forward10')} className="w-7 h-7 rounded bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-xs shadow-sm border border-gray-200">
                                 &gt;&gt;
                             </button>
-                            <button onClick={stepLast} disabled={currentState.children.length === 0} title="Last Move (End)" className="w-7 h-7 rounded bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-xs shadow-sm border border-gray-200">
+                            <button onClick={stepLast} disabled={currentState.children.length === 0} title={t('tooltip.lastMove')} className="w-7 h-7 rounded bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-xs shadow-sm border border-gray-200">
                                 &gt;|
                             </button>
                         </div>
@@ -2482,7 +2489,7 @@ function App() {
                         {/* Branch Candidates (if multiple branches exist) */}
                         {branchCandidates.length > 1 && (
                             <div className="flex items-center gap-1 ml-2">
-                                <span className="text-xs text-gray-500">分岐:</span>
+                                <span className="text-xs text-gray-500">{t('ui.branch')}:</span>
                                 {branchCandidates.map((candidate, idx) => (
                                     <button
                                         key={idx}
@@ -2494,7 +2501,7 @@ function App() {
                                             }
                                         }}
                                         className="w-6 h-6 rounded bg-white hover:bg-yellow-100 text-gray-800 border border-yellow-400 flex items-center justify-center font-bold text-xs shadow-sm transition-all"
-                                        title={`分岐 ${candidate.value} (${candidate.x},${candidate.y})`}
+                                        title={t('tooltip.branch', { value: String(candidate.value), x: String(candidate.x), y: String(candidate.y) })}
                                     >
                                         {candidate.value}
                                     </button>

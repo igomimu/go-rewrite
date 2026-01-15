@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from '../i18n';
 
 interface GameInfoModalProps {
     onClose: () => void;
@@ -25,12 +26,14 @@ interface GameInfoModalProps {
 }
 
 const GameInfoModal: React.FC<GameInfoModalProps> = (props) => {
+    const { t } = useTranslation();
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4 font-sans text-sm" onClick={props.onClose}>
             <div className="bg-gray-100 rounded-lg shadow-xl w-full max-w-lg border border-gray-400" onClick={e => e.stopPropagation()}>
                 {/* Header */}
                 <div className="flex justify-between items-center p-2 border-b border-gray-300 bg-gray-200 rounded-t-lg">
-                    <span className="font-normal text-gray-800">対局情報</span>
+                    <span className="font-normal text-gray-800">{t('gameInfo.title')}</span>
                     <button onClick={props.onClose} className="text-gray-600 hover:text-gray-900 text-lg leading-none">
                         ×
                     </button>
@@ -39,81 +42,81 @@ const GameInfoModal: React.FC<GameInfoModalProps> = (props) => {
                 <div className="p-4 space-y-4 max-h-[85vh] overflow-y-auto">
                     {/* Common Section */}
                     <div className="border border-gray-300 rounded p-2 bg-gray-50 relative pt-4">
-                        <span className="absolute -top-2.5 left-2 bg-gray-50 px-1 text-xs text-black">基本情報</span>
+                        <span className="absolute -top-2.5 left-2 bg-gray-50 px-1 text-xs text-black">{t('gameInfo.basicInfo')}</span>
                         <div className="grid grid-cols-[auto_1fr] gap-2 items-center mb-2">
-                            <label className="w-24 text-gray-700">対局名称</label>
+                            <label className="w-24 text-gray-700">{t('gameInfo.gameName')}</label>
                             <input className="border border-gray-400 px-1 py-0.5 w-full bg-white focus:outline-none focus:border-blue-500"
                                 value={props.gameName} onChange={e => props.setGameName(e.target.value)} />
                         </div>
 
                         <div className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-2 gap-y-2 items-center">
-                            <label className="w-24 text-gray-700">白番</label>
+                            <label className="w-24 text-gray-700">{t('gameInfo.white')}</label>
                             <input className="border border-gray-400 px-1 py-0.5 w-full bg-white" value={props.whiteName} onChange={e => props.setWhiteName(e.target.value)} />
-                            <label className="w-24 text-gray-700 pl-2">黒番</label>
+                            <label className="w-24 text-gray-700 pl-2">{t('gameInfo.black')}</label>
                             <input className="border border-gray-400 px-1 py-0.5 w-full bg-white" value={props.blackName} onChange={e => props.setBlackName(e.target.value)} />
 
-                            <label className="w-24 text-gray-700">白番ランク</label>
+                            <label className="w-24 text-gray-700">{t('gameInfo.whiteRank')}</label>
                             <input className="border border-gray-400 px-1 py-0.5 w-full bg-white" value={props.whiteRank} onChange={e => props.setWhiteRank(e.target.value)} />
-                            <label className="w-24 text-gray-700 pl-2">黒番ランク</label>
+                            <label className="w-24 text-gray-700 pl-2">{t('gameInfo.blackRank')}</label>
                             <input className="border border-gray-400 px-1 py-0.5 w-full bg-white" value={props.blackRank} onChange={e => props.setBlackRank(e.target.value)} />
 
-                            <label className="w-24 text-gray-700">白番チーム</label>
+                            <label className="w-24 text-gray-700">{t('gameInfo.whiteTeam')}</label>
                             <input className="border border-gray-400 px-1 py-0.5 w-full bg-white" value={props.whiteTeam} onChange={e => props.setWhiteTeam(e.target.value)} />
-                            <label className="w-24 text-gray-700 pl-2">黒番チーム</label>
+                            <label className="w-24 text-gray-700 pl-2">{t('gameInfo.blackTeam')}</label>
                             <input className="border border-gray-400 px-1 py-0.5 w-full bg-white" value={props.blackTeam} onChange={e => props.setBlackTeam(e.target.value)} />
 
-                            <label className="w-24 text-gray-700">コミ</label>
+                            <label className="w-24 text-gray-700">{t('gameInfo.komi')}</label>
                             <input className="border border-gray-400 px-1 py-0.5 w-full bg-white" value={props.komi} onChange={e => props.setKomi(e.target.value)} />
-                            <label className="w-24 text-gray-700 pl-2">置き石</label>
+                            <label className="w-24 text-gray-700 pl-2">{t('gameInfo.handicap')}</label>
                             <input className="border border-gray-400 px-1 py-0.5 w-full bg-white" value={props.handicap} onChange={e => props.setHandicap(e.target.value)} />
                         </div>
                         <div className="grid grid-cols-[auto_1fr] gap-2 items-center mt-2">
-                            <label className="w-24 text-gray-700">結果</label>
+                            <label className="w-24 text-gray-700">{t('gameInfo.result')}</label>
                             <input className="border border-gray-400 px-1 py-0.5 w-32 bg-white" value={props.result} onChange={e => props.setResult(e.target.value)} />
                         </div>
                     </div>
 
                     {/* When and Where Section */}
                     <div className="border border-gray-300 rounded p-2 bg-gray-50 relative pt-4">
-                        <span className="absolute -top-2.5 left-2 bg-gray-50 px-1 text-xs text-black">日時・場所</span>
+                        <span className="absolute -top-2.5 left-2 bg-gray-50 px-1 text-xs text-black">{t('gameInfo.datePlace')}</span>
                         <div className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-2 gap-y-2 items-center mb-2">
-                            <label className="w-24 text-gray-700">日付</label>
+                            <label className="w-24 text-gray-700">{t('gameInfo.date')}</label>
                             <input className="border border-gray-400 px-1 py-0.5 w-full bg-white" value={props.date} onChange={e => props.setDate(e.target.value)} />
-                            <label className="w-24 text-gray-700 pl-2">場所</label>
+                            <label className="w-24 text-gray-700 pl-2">{t('gameInfo.place')}</label>
                             <input className="border border-gray-400 px-1 py-0.5 w-full bg-white" value={props.place} onChange={e => props.setPlace(e.target.value)} />
 
-                            <label className="w-24 text-gray-700">時間</label>
+                            <label className="w-24 text-gray-700">{t('gameInfo.time')}</label>
                             <input className="border border-gray-400 px-1 py-0.5 w-full bg-white" value={props.time} onChange={e => props.setTime(e.target.value)} />
-                            <label className="w-24 text-gray-700 pl-2">回戦</label>
+                            <label className="w-24 text-gray-700 pl-2">{t('gameInfo.round')}</label>
                             <input className="border border-gray-400 px-1 py-0.5 w-full bg-white" value={props.round} onChange={e => props.setRound(e.target.value)} />
                         </div>
                         <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
-                            <label className="w-24 text-gray-700">イベント</label>
+                            <label className="w-24 text-gray-700">{t('gameInfo.event')}</label>
                             <input className="border border-gray-400 px-1 py-0.5 w-full bg-white" value={props.event} onChange={e => props.setEvent(e.target.value)} />
                         </div>
                     </div>
 
                     {/* Other Section */}
                     <div className="border border-gray-300 rounded p-2 bg-gray-50 relative pt-4">
-                        <span className="absolute -top-2.5 left-2 bg-gray-50 px-1 text-xs text-black">その他</span>
+                        <span className="absolute -top-2.5 left-2 bg-gray-50 px-1 text-xs text-black">{t('gameInfo.other')}</span>
                         <div className="grid grid-cols-[auto_1fr] gap-2 items-center mb-2">
-                            <label className="w-24 text-gray-700">記録者</label>
+                            <label className="w-24 text-gray-700">{t('gameInfo.recorder')}</label>
                             <input className="border border-gray-400 px-1 py-0.5 w-full bg-white" value={props.user} onChange={e => props.setUser(e.target.value)} />
                         </div>
                         <div className="grid grid-cols-[auto_1fr] gap-2 items-center mb-2">
-                            <label className="w-24 text-gray-700">情報源</label>
+                            <label className="w-24 text-gray-700">{t('gameInfo.source')}</label>
                             <input className="border border-gray-400 px-1 py-0.5 w-full bg-white" value={props.source} onChange={e => props.setSource(e.target.value)} />
                         </div>
                         <div className="grid grid-cols-[auto_1fr] gap-2 items-start mb-2">
-                            <label className="w-24 text-gray-700 pt-1">コメント</label>
+                            <label className="w-24 text-gray-700 pt-1">{t('gameInfo.comment')}</label>
                             <textarea className="border border-gray-400 px-1 py-0.5 w-full bg-white h-16 resize-y" value={props.gameComment} onChange={e => props.setGameComment(e.target.value)} />
                         </div>
                         <div className="grid grid-cols-[auto_1fr] gap-2 items-center mb-2">
-                            <label className="w-24 text-gray-700">著作権</label>
+                            <label className="w-24 text-gray-700">{t('gameInfo.copyright')}</label>
                             <input className="border border-gray-400 px-1 py-0.5 w-full bg-white" value={props.copyright} onChange={e => props.setCopyright(e.target.value)} />
                         </div>
                         <div className="grid grid-cols-[auto_1fr] gap-2 items-center">
-                            <label className="w-24 text-gray-700">注釈</label>
+                            <label className="w-24 text-gray-700">{t('gameInfo.annotation')}</label>
                             <input className="border border-gray-400 px-1 py-0.5 w-full bg-white" value={props.annotation} onChange={e => props.setAnnotation(e.target.value)} />
                         </div>
                     </div>
@@ -122,10 +125,10 @@ const GameInfoModal: React.FC<GameInfoModalProps> = (props) => {
                 {/* Footer Buttons */}
                 <div className="p-3 border-t border-gray-300 bg-gray-200 rounded-b-lg flex justify-end gap-2">
                     <button onClick={props.onClose} className="px-4 py-1.5 bg-white border border-gray-400 rounded hover:bg-gray-50 text-black text-xs shadow-sm w-20">
-                        OK
+                        {t('gameInfo.ok')}
                     </button>
                     <button onClick={props.onClose} className="px-4 py-1.5 bg-white border border-gray-400 rounded hover:bg-gray-50 text-black text-xs shadow-sm w-20">
-                        キャンセル
+                        {t('gameInfo.cancel')}
                     </button>
                 </div>
             </div>
