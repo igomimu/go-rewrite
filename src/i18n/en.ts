@@ -28,7 +28,8 @@ export const en: Record<TranslationKey, string> = {
     // Tooltips - Export
     'tooltip.copyAs': 'Copy as {format} (Click to Copy)',
     'tooltip.savePng': 'Save as PNG...',
-    'tooltip.toggleFormat': 'Toggle Export Format (SVG/PNG)',
+    'tooltip.exportGif': 'Save as Animated GIF...',
+    'tooltip.toggleFormat': 'Toggle export format (SVG/PNG)',
 
     // Tooltips - System
     'tooltip.openNewTab': 'Open in New Tab (Maximize)',
@@ -63,8 +64,9 @@ export const en: Record<TranslationKey, string> = {
     'ui.black': 'Black',
     'ui.white': 'White',
     'ui.color': 'Color',
-    'ui.monochrome': 'B/W',
+    'ui.monochrome': 'Monochrome',
     'ui.branch': 'Branch',
+    'ui.exportingGif': 'Creating GIF...',
 
     // Help Modal
     'help.title': 'Shortcuts & Help',

@@ -142,7 +142,7 @@ export async function exportToPng(svgElement: SVGSVGElement, options: { scale?: 
 /**
  * Helper to rasterize SVG to PNG Blob
  */
-async function svgToPngBlob(svgElement: SVGSVGElement, width: number, height: number, scale: number, backgroundColor: string): Promise<Blob> {
+export async function svgToPngBlob(svgElement: SVGSVGElement, width: number, height: number, scale: number, backgroundColor: string): Promise<Blob> {
     const serializer = new XMLSerializer();
     const svgString = serializer.serializeToString(svgElement);
     const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
@@ -304,7 +304,7 @@ export async function exportToSvg(svgElement: SVGSVGElement, options: { backgrou
  * 2. window.showSaveFilePicker (File System Access API) - opens standard Save dialog
  * 3. <a> tag download (Fallback)
  */
-async function saveFile(blob: Blob, filename: string, typeDescription: string, mimeType: string) {
+export async function saveFile(blob: Blob, filename: string, typeDescription: string, mimeType: string) {
     // 1. File System Access API (Modern Web - PREFERRED for no-download-UI)
     if ('showSaveFilePicker' in window) {
         try {

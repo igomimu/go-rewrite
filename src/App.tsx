@@ -3,7 +3,8 @@ import { flushSync } from 'react-dom'
 import GoBoard, { ViewRange, BoardState, StoneColor, Marker, Stone } from './components/GoBoard'
 import GameInfoModal from './components/GameInfoModal'
 import PrintSettingsModal, { PrintSettings } from './components/PrintSettingsModal'
-import { exportToPng, exportToSvg } from './utils/exportUtilsLegacy'
+import { exportToPng, exportToSvg, svgToPngBlob, saveFile } from './utils/exportUtils'
+import { createGifFromImages } from './utils/gifExportUtils'
 import { checkCaptures } from './utils/gameLogic'
 import { parseSGFTree, generateSGFTree, SgfTreeNode } from './utils/sgfUtils'
 import { generatePrintFigures } from './utils/printUtils'
@@ -103,6 +104,8 @@ function App() {
     });
 
     const [showCapturedInExport, setShowCapturedInExport] = useState(false);
+    const [isExportingGif, setIsExportingGif] = useState(false);
+    const [gifProgress, setGifProgress] = useState(0);
 
     // Version Display Logic
     const [displayVersion, setDisplayVersion] = useState(`v${APP_VERSION}`);
@@ -1564,6 +1567,62 @@ function App() {
         setMoveSource(null);
     }, [selectionStart, selectionEnd, getBounds, getRestoredStones, showCapturedInExport, performExport]);
 
+    const handleExportGif = useCallback(async () => {
+        if (!svgRef.current) return;
+        setIsExportingGif(true);
+        setGifProgress(0);
+
+        const originalNodeId = currentNodeId;
+        const frames: string[] = [];
+
+        try {
+            // Step-by-step frame capture
+            for (let i = 0; i < history.length; i++) {
+                // Force sync update for frame capture
+                flushSync(() => {
+                    setCurrentNodeId(history[i].id);
+                });
+
+                const svg = svgRef.current;
+                const vb = svg.getAttribute('viewBox')!.split(' ').map(Number);
+                const width = vb[2];
+                const height = vb[3];
+
+                const blob = await svgToPngBlob(svg, width, height, 1.5, '#DCB35C');
+                const dataUrl = await new Promise<string>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.readAsDataURL(blob);
+                });
+                frames.push(dataUrl);
+            }
+
+            // Restore state
+            flushSync(() => {
+                setCurrentNodeId(originalNodeId);
+            });
+
+            // Compilation
+            const gifDataUrl = await createGifFromImages(frames, {
+                width: 600,
+                height: 600,
+                interval: 0.3, // Faster than 0.5 for better flow
+                progressCallback: (p) => setGifProgress(Math.round(p * 100)),
+            });
+
+            // Conversion and Save
+            const gifBlob = await (await fetch(gifDataUrl)).blob();
+            await saveFile(gifBlob, 'sgf_animation.gif', 'GIF Animation', 'image/gif');
+
+        } catch (err) {
+            console.error("GIF Export Error:", err);
+            alert("GIFの作成に失敗しました。");
+        } finally {
+            setIsExportingGif(false);
+            setGifProgress(0);
+        }
+    }, [history, currentNodeId, svgRef]);
+
 
 
     // SGF Logic
@@ -2029,6 +2088,25 @@ function App() {
                     </div>
                 )}
 
+                {/* Progress Overlay for GIF Export */}
+                {isExportingGif && (
+                    <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-40 backdrop-blur-sm">
+                        <div className="bg-white p-6 rounded-xl shadow-2xl flex flex-col items-center gap-4 border border-indigo-100">
+                            <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                            <div className="flex flex-col items-center">
+                                <span className="font-bold text-gray-800">{t('ui.exportingGif')}</span>
+                                <span className="text-sm text-gray-500">{gifProgress}%</span>
+                            </div>
+                            <div className="w-48 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-indigo-600 transition-all duration-300"
+                                    style={{ width: `${gifProgress}%` }}
+                                ></div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Print Area Removed (Moved Outside) */}
                 <div className="flex justify-between w-full items-center mb-2">
                     <div className="flex items-baseline gap-2" title={isDevMode ? `Public: v${APP_VERSION}` : `Internal: ${DEV_VERSION}`}>
@@ -2121,6 +2199,14 @@ function App() {
                                 className="w-6 h-6 rounded-md bg-white text-indigo-600 hover:bg-indigo-50 flex items-center justify-center font-bold transition-all text-sm shadow-sm"
                             >
                                 ⬇️
+                            </button>
+                            <button
+                                onClick={handleExportGif}
+                                disabled={isExportingGif}
+                                title={t('tooltip.exportGif')}
+                                className="w-6 h-6 rounded-md bg-white text-indigo-600 hover:bg-indigo-50 flex items-center justify-center font-bold transition-all text-sm shadow-sm disabled:opacity-50"
+                            >
+                                🎞️
                             </button>
                             <button
                                 title={t('tooltip.toggleFormat')}

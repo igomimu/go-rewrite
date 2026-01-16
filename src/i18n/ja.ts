@@ -26,6 +26,7 @@ export const ja = {
     // Tooltips - Export
     'tooltip.copyAs': '{format}としてコピー (クリックでコピー)',
     'tooltip.savePng': 'PNGとして保存...',
+    'tooltip.exportGif': 'GIFアニメーションとして保存...',
     'tooltip.toggleFormat': 'エクスポート形式を切り替え (SVG/PNG)',
 
     // Tooltips - System
@@ -63,6 +64,7 @@ export const ja = {
     'ui.color': 'カラー',
     'ui.monochrome': '白黒',
     'ui.branch': '分岐',
+    'ui.exportingGif': 'GIF生成中...',
 
     // Help Modal
     'help.title': 'ショートカット & ヘルプ',
