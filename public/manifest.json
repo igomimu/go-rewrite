@@ -1,11 +1,7 @@
 ﻿{
     "manifest_version": 3,
     "name": "GORewrite (Dev)",
-<<<<<<< HEAD
     "version": "2.0.0",
-=======
-    "version": "39.1.15",
->>>>>>> e9230de94ba807cc6bc837bc33b646a9e6a55f65
     "icons": {
         "16": "icons/icon16.png",
         "48": "icons/icon48.png",
