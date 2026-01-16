@@ -1,5 +1,49 @@
 declare const chrome: any;
 
+// Word Compatibility: Convert color names to hex values to prevent Word's color remapping
+const COLOR_NAME_MAP: Record<string, string> = {
+    black: '#000000',
+    white: '#FFFFFF',
+    '#000': '#000000',
+    '#fff': '#FFFFFF',
+};
+
+function normalizeColorValue(value: string): string | null {
+    const trimmed = value.trim();
+    const lower = trimmed.toLowerCase();
+    return COLOR_NAME_MAP[lower] || null;
+}
+
+function normalizeSvgColors(svgElement: SVGSVGElement): void {
+    const attributesToNormalize = ['fill', 'stroke', 'color', 'stop-color'];
+    const elements = svgElement.querySelectorAll('*');
+
+    elements.forEach(el => {
+        attributesToNormalize.forEach(attr => {
+            const value = el.getAttribute(attr);
+            if (!value) return;
+            const normalized = normalizeColorValue(value);
+            if (normalized) {
+                el.setAttribute(attr, normalized);
+            }
+        });
+
+        const style = el.getAttribute('style');
+        if (style) {
+            const updated = style.replace(
+                /\b(fill|stroke|color)\s*:\s*(black|white)\b/gi,
+                (_match, prop, color) => {
+                    const normalized = normalizeColorValue(color);
+                    return normalized ? `${prop}: ${normalized}` : _match;
+                }
+            );
+            if (updated !== style) {
+                el.setAttribute('style', updated);
+            }
+        }
+    });
+}
+
 /**
  * FIX v17/v19:
  * - Clones SVG to ensure attributes can be modified safeley.
@@ -41,6 +85,10 @@ export async function exportToPng(svgElement: SVGSVGElement, options: { scale?: 
     // 4. FORCE Width/Height Attributes to match viewBox (Pixels)
     clone.setAttribute('width', `${width}px`);
     clone.setAttribute('height', `${height}px`);
+
+    // HOTFIX: Explicitly reset filters and color-scheme to defeat Dark Reader or other extensions
+    clone.style.filter = 'none';
+    clone.style.colorScheme = 'light';
 
     // 5. Handle Background Color
     clone.style.backgroundColor = backgroundColor;
@@ -134,9 +182,11 @@ export async function exportToSvg(svgElement: SVGSVGElement, options: { backgrou
     ignoredElements.forEach(el => el.remove());
 
     // 3. Get the crop aspect ratio / dimensions from viewBox
-    let width, height;
+    let width, height, minX = 0, minY = 0;
     if (clone.getAttribute('viewBox')) {
         const vb = clone.getAttribute('viewBox')!.split(' ').map(Number);
+        minX = vb[0];
+        minY = vb[1];
         width = vb[2];
         height = vb[3];
     } else {
@@ -150,14 +200,17 @@ export async function exportToSvg(svgElement: SVGSVGElement, options: { backgrou
     clone.setAttribute('width', `${width}px`);
     clone.setAttribute('height', `${height}px`);
 
-    // 5. Set background color (Explicit Rect for Word compatibility)
-    // clone.style.backgroundColor = backgroundColor; // unreliable in Word
+    // HOTFIX: Explicitly reset filters and color-scheme to defeat Dark Reader or other extensions
+    clone.style.filter = 'none';
+    clone.style.colorScheme = 'light';
 
+    // 5. Set background color (Explicit Rect for Word compatibility)
+    // Use exact viewBox coordinates, NOT "100%" - Word sometimes misinterprets percentage values
     const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    bgRect.setAttribute("x", "0");
-    bgRect.setAttribute("y", "0");
-    bgRect.setAttribute("width", "100%");
-    bgRect.setAttribute("height", "100%");
+    bgRect.setAttribute("x", String(minX));
+    bgRect.setAttribute("y", String(minY));
+    bgRect.setAttribute("width", String(width));
+    bgRect.setAttribute("height", String(height));
     bgRect.setAttribute("fill", backgroundColor || "#FFFFFF"); // Default to White if empty
 
     // Insert as first child
@@ -166,6 +219,9 @@ export async function exportToSvg(svgElement: SVGSVGElement, options: { backgrou
     } else {
         clone.appendChild(bgRect);
     }
+
+    // Word Compatibility: Convert color names to hex values
+    normalizeSvgColors(clone);
 
     // 6. Serialize
     const serializer = new XMLSerializer();

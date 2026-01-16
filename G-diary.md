@@ -121,9 +121,13 @@
 
 - **2026-01-15**:
     - **[Fix] Version Unification (v1.5.0 / v39.1.13)**:
-        - 混乱していたバージョン表記を統一しました。
-        - **Public Version**: `v1.5.0` (manifest.json, package.json)
-        - **Dev Version**: `v39.1.13` (Internal tracking)
-        - **Dynamic Display**: `chrome.management.getSelf` APIを利用し、インストールタイプが `development` の場合のみ `Dev v39...` を表示、それ以外（ストア版）は `v1.5.0` を表示するように実装しました。
-        - **Dev Environment**: 拡張機能管理画面での混同を防ぐため、開発版の `manifest.json` の名前を `GORewrite (Dev)` に変更しました（リリース時は自動で戻ります）。
+        - 混乱していたバージョン表記を統一しました (v1.5.0).
+    - **[Feature] Translation Support (v1.6.0)**:
+        - **i18n Support**: 英語・中国語への翻訳機能を追加しました (v1.6.0として提出済み).
+        - **Note**: このバージョンにはSVGエクスポート時に背景が反転する不具合が含まれている可能性があります.
+
+- **2026-01-16**:
+    - **[Fix] SVG/GIF Export Hardening (v1.6.1 / v39.1.23)**:
+        - **Critical Fix**: SVGエクスポート時に、特定のブラウザ環境（ダークモード拡張機能など）において色が反転したり背景が黒くなる問題を、強力なスタイル強制 (`color-scheme: light`, `filter: none`) により修正しました。
+        - **Rollback**: 安定性重視のため、実験的機能であったGIF出力機能は削除しました。本バージョンは「翻訳機能(v1.6.0) + エクスポート修正」の安定版となります。
 
