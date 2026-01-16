@@ -27,7 +27,8 @@ export const zh: Record<TranslationKey, string> = {
 
     // Tooltips - Export
     'tooltip.copyAs': '复制为{format} (点击复制)',
-    'tooltip.savePng': '保存为PNG...',
+    'tooltip.savePng': '保存为 PNG...',
+    'tooltip.exportGif': '保存为 GIF 动画...',
     'tooltip.toggleFormat': '切换导出格式 (SVG/PNG)',
 
     // Tooltips - System
@@ -65,6 +66,7 @@ export const zh: Record<TranslationKey, string> = {
     'ui.color': '彩色',
     'ui.monochrome': '黑白',
     'ui.branch': '分支',
+    'ui.exportingGif': '正在生成 GIF...',
 
     // Help Modal
     'help.title': '快捷键 & 帮助',

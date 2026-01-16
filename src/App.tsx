@@ -3,8 +3,8 @@ import { flushSync } from 'react-dom'
 import GoBoard, { ViewRange, BoardState, StoneColor, Marker, Stone } from './components/GoBoard'
 import GameInfoModal from './components/GameInfoModal'
 import PrintSettingsModal, { PrintSettings } from './components/PrintSettingsModal'
-import { exportToPng, exportToSvg } from './utils/exportUtilsLegacy'
-import { generateGif, svgToCanvas, downloadBlob } from './utils/gifExport'
+import { exportToPng, exportToSvg, svgToPngBlob, saveFile } from './utils/exportUtils'
+import { createGifFromImages } from './utils/gifExportUtils'
 import { checkCaptures } from './utils/gameLogic'
 import { parseSGFTree, generateSGFTree, SgfTreeNode } from './utils/sgfUtils'
 import { generatePrintFigures } from './utils/printUtils'
@@ -93,7 +93,6 @@ function App() {
     const [showCoordinates, setShowCoordinates] = useState(false);
     const [showNumbers, setShowNumbers] = useState(true);
     const [showHelp, setShowHelp] = useState(false);
-    const [isGeneratingGif, setIsGeneratingGif] = useState(false);
     const [mode, setMode] = useState<PlacementMode>('SIMPLE');
 
     // ... (Retention of other states like isMonochrome, exportMode ...)
@@ -105,6 +104,8 @@ function App() {
     });
 
     const [showCapturedInExport, setShowCapturedInExport] = useState(false);
+    const [isExportingGif, setIsExportingGif] = useState(false);
+    const [gifProgress, setGifProgress] = useState(0);
 
     // Version Display Logic
     const [displayVersion, setDisplayVersion] = useState(`v${APP_VERSION}`);
@@ -1566,95 +1567,61 @@ function App() {
         setMoveSource(null);
     }, [selectionStart, selectionEnd, getBounds, getRestoredStones, showCapturedInExport, performExport]);
 
-    // GIF Export Handler - Shows preview animation then saves
-    const handleGifExport = useCallback(async () => {
-        if (isGeneratingGif || history.length <= 1) return;
+    const handleExportGif = useCallback(async () => {
+        if (!svgRef.current) return;
+        setIsExportingGif(true);
+        setGifProgress(0);
 
-        setIsGeneratingGif(true);
-
-        const frames: HTMLCanvasElement[] = [];
-        const gifSize = 400;
-        const frameDelay = 500; // ms between each move during preview
+        const originalNodeId = currentNodeId;
+        const frames: string[] = [];
 
         try {
-            // Helper to wait for next paint
-            const waitForPaint = () => new Promise<void>(resolve => {
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(() => resolve());
-                });
-            });
-
-            // First: Go to the beginning
-            flushSync(() => {
-                setCurrentNodeId(rootNode.id);
-            });
-            await waitForPaint();
-            await new Promise(r => setTimeout(r, 100));
-
-            // Animate through each move and capture frames
-            const allMoves = getPath(rootNode, history[history.length - 1].id);
-
-            for (let i = 0; i < allMoves.length; i++) {
-                // Navigate to this move (visible on screen)
+            // Step-by-step frame capture
+            for (let i = 0; i < history.length; i++) {
+                // Force sync update for frame capture
                 flushSync(() => {
-                    setCurrentNodeId(allMoves[i].id);
+                    setCurrentNodeId(history[i].id);
                 });
 
-                // Wait for browser to paint
-                await waitForPaint();
+                const svg = svgRef.current;
+                const vb = svg.getAttribute('viewBox')!.split(' ').map(Number);
+                const width = vb[2];
+                const height = vb[3];
 
-                // Wait for the animation frame delay (visible to user)
-                await new Promise(r => setTimeout(r, frameDelay));
-
-                // Capture current board as frame
-                if (svgRef.current) {
-                    const canvas = await svgToCanvas(svgRef.current, gifSize, gifSize);
-                    frames.push(canvas);
-                }
+                const blob = await svgToPngBlob(svg, width, height, 1.5, '#DCB35C');
+                const dataUrl = await new Promise<string>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.readAsDataURL(blob);
+                });
+                frames.push(dataUrl);
             }
 
-            // Generate GIF from captured frames
-            const blob = await generateGif(frames, {
-                delay: 800,
-                width: gifSize,
-                height: gifSize,
-                quality: 10,
+            // Restore state
+            flushSync(() => {
+                setCurrentNodeId(originalNodeId);
             });
 
-            // Prompt user for save location using File System Access API
-            const filename = (gameName || 'kifu') + '.gif';
+            // Compilation
+            const gifDataUrl = await createGifFromImages(frames, {
+                width: 600,
+                height: 600,
+                interval: 0.3, // Faster than 0.5 for better flow
+                progressCallback: (p) => setGifProgress(Math.round(p * 100)),
+            });
 
-            try {
-                // Try using showSaveFilePicker for better UX
-                if ('showSaveFilePicker' in window) {
-                    const handle = await (window as any).showSaveFilePicker({
-                        suggestedName: filename,
-                        types: [{
-                            description: 'GIF Animation',
-                            accept: { 'image/gif': ['.gif'] },
-                        }],
-                    });
-                    const writable = await handle.createWritable();
-                    await writable.write(blob);
-                    await writable.close();
-                } else {
-                    // Fallback to download
-                    downloadBlob(blob, filename);
-                }
-            } catch (e) {
-                // User cancelled the picker, or fallback needed
-                if ((e as any).name !== 'AbortError') {
-                    downloadBlob(blob, filename);
-                }
-            }
+            // Conversion and Save
+            const gifBlob = await (await fetch(gifDataUrl)).blob();
+            await saveFile(gifBlob, 'sgf_animation.gif', 'GIF Animation', 'image/gif');
 
-        } catch (error) {
-            console.error('GIF export error:', error);
-            alert('GIF生成に失敗しました');
+        } catch (err) {
+            console.error("GIF Export Error:", err);
+            alert("GIFの作成に失敗しました。");
         } finally {
-            setIsGeneratingGif(false);
+            setIsExportingGif(false);
+            setGifProgress(0);
         }
-    }, [isGeneratingGif, history, rootNode, gameName]);
+    }, [history, currentNodeId, svgRef]);
 
 
 
@@ -2121,6 +2088,25 @@ function App() {
                     </div>
                 )}
 
+                {/* Progress Overlay for GIF Export */}
+                {isExportingGif && (
+                    <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-40 backdrop-blur-sm">
+                        <div className="bg-white p-6 rounded-xl shadow-2xl flex flex-col items-center gap-4 border border-indigo-100">
+                            <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                            <div className="flex flex-col items-center">
+                                <span className="font-bold text-gray-800">{t('ui.exportingGif')}</span>
+                                <span className="text-sm text-gray-500">{gifProgress}%</span>
+                            </div>
+                            <div className="w-48 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-indigo-600 transition-all duration-300"
+                                    style={{ width: `${gifProgress}%` }}
+                                ></div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Print Area Removed (Moved Outside) */}
                 <div className="flex justify-between w-full items-center mb-2">
                     <div className="flex items-baseline gap-2" title={isDevMode ? `Public: v${APP_VERSION}` : `Internal: ${DEV_VERSION}`}>
@@ -2215,6 +2201,14 @@ function App() {
                                 ⬇️
                             </button>
                             <button
+                                onClick={handleExportGif}
+                                disabled={isExportingGif}
+                                title={t('tooltip.exportGif')}
+                                className="w-6 h-6 rounded-md bg-white text-indigo-600 hover:bg-indigo-50 flex items-center justify-center font-bold transition-all text-sm shadow-sm disabled:opacity-50"
+                            >
+                                🎞️
+                            </button>
+                            <button
                                 title={t('tooltip.toggleFormat')}
                                 onClick={() => {
                                     const next = exportMode === 'SVG' ? 'PNG' : 'SVG';
@@ -2224,14 +2218,6 @@ function App() {
                                 className="text-[9px] font-bold px-1 rounded bg-white border shadow-sm text-gray-600 hover:text-blue-600 ml-0.5 h-6 flex items-center"
                             >
                                 {exportMode}
-                            </button>
-                            <button
-                                onClick={handleGifExport}
-                                disabled={isGeneratingGif}
-                                title="Export as GIF"
-                                className={`w-6 h-6 rounded-md flex items-center justify-center font-bold transition-all text-sm shadow-sm ${isGeneratingGif ? 'bg-gray-200 text-gray-400' : 'bg-white text-indigo-600 hover:bg-indigo-50'}`}
-                            >
-                                {isGeneratingGif ? '⏳' : '🎬'}
                             </button>
                         </div>
 
