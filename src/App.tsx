@@ -4,6 +4,7 @@ import GoBoard, { ViewRange, BoardState, StoneColor, Marker, Stone } from './com
 import GameInfoModal from './components/GameInfoModal'
 import PrintSettingsModal, { PrintSettings } from './components/PrintSettingsModal'
 import { exportToPng, exportToSvg } from './utils/exportUtilsLegacy'
+import { generateGif, svgToCanvas, downloadBlob } from './utils/gifExport'
 import { checkCaptures } from './utils/gameLogic'
 import { parseSGFTree, generateSGFTree, SgfTreeNode } from './utils/sgfUtils'
 import { generatePrintFigures } from './utils/printUtils'
@@ -92,6 +93,7 @@ function App() {
     const [showCoordinates, setShowCoordinates] = useState(false);
     const [showNumbers, setShowNumbers] = useState(true);
     const [showHelp, setShowHelp] = useState(false);
+    const [isGeneratingGif, setIsGeneratingGif] = useState(false);
     const [mode, setMode] = useState<PlacementMode>('SIMPLE');
 
     // ... (Retention of other states like isMonochrome, exportMode ...)
@@ -1564,6 +1566,96 @@ function App() {
         setMoveSource(null);
     }, [selectionStart, selectionEnd, getBounds, getRestoredStones, showCapturedInExport, performExport]);
 
+    // GIF Export Handler - Shows preview animation then saves
+    const handleGifExport = useCallback(async () => {
+        if (isGeneratingGif || history.length <= 1) return;
+
+        setIsGeneratingGif(true);
+
+        const frames: HTMLCanvasElement[] = [];
+        const gifSize = 400;
+        const frameDelay = 500; // ms between each move during preview
+
+        try {
+            // Helper to wait for next paint
+            const waitForPaint = () => new Promise<void>(resolve => {
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => resolve());
+                });
+            });
+
+            // First: Go to the beginning
+            flushSync(() => {
+                setCurrentNodeId(rootNode.id);
+            });
+            await waitForPaint();
+            await new Promise(r => setTimeout(r, 100));
+
+            // Animate through each move and capture frames
+            const allMoves = getPath(rootNode, history[history.length - 1].id);
+
+            for (let i = 0; i < allMoves.length; i++) {
+                // Navigate to this move (visible on screen)
+                flushSync(() => {
+                    setCurrentNodeId(allMoves[i].id);
+                });
+
+                // Wait for browser to paint
+                await waitForPaint();
+
+                // Wait for the animation frame delay (visible to user)
+                await new Promise(r => setTimeout(r, frameDelay));
+
+                // Capture current board as frame
+                if (svgRef.current) {
+                    const canvas = await svgToCanvas(svgRef.current, gifSize, gifSize);
+                    frames.push(canvas);
+                }
+            }
+
+            // Generate GIF from captured frames
+            const blob = await generateGif(frames, {
+                delay: 800,
+                width: gifSize,
+                height: gifSize,
+                quality: 10,
+            });
+
+            // Prompt user for save location using File System Access API
+            const filename = (gameName || 'kifu') + '.gif';
+
+            try {
+                // Try using showSaveFilePicker for better UX
+                if ('showSaveFilePicker' in window) {
+                    const handle = await (window as any).showSaveFilePicker({
+                        suggestedName: filename,
+                        types: [{
+                            description: 'GIF Animation',
+                            accept: { 'image/gif': ['.gif'] },
+                        }],
+                    });
+                    const writable = await handle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                } else {
+                    // Fallback to download
+                    downloadBlob(blob, filename);
+                }
+            } catch (e) {
+                // User cancelled the picker, or fallback needed
+                if ((e as any).name !== 'AbortError') {
+                    downloadBlob(blob, filename);
+                }
+            }
+
+        } catch (error) {
+            console.error('GIF export error:', error);
+            alert('GIF生成に失敗しました');
+        } finally {
+            setIsGeneratingGif(false);
+        }
+    }, [isGeneratingGif, history, rootNode, gameName]);
+
 
 
     // SGF Logic
@@ -2132,6 +2224,14 @@ function App() {
                                 className="text-[9px] font-bold px-1 rounded bg-white border shadow-sm text-gray-600 hover:text-blue-600 ml-0.5 h-6 flex items-center"
                             >
                                 {exportMode}
+                            </button>
+                            <button
+                                onClick={handleGifExport}
+                                disabled={isGeneratingGif}
+                                title="Export as GIF"
+                                className={`w-6 h-6 rounded-md flex items-center justify-center font-bold transition-all text-sm shadow-sm ${isGeneratingGif ? 'bg-gray-200 text-gray-400' : 'bg-white text-indigo-600 hover:bg-indigo-50'}`}
+                            >
+                                {isGeneratingGif ? '⏳' : '🎬'}
                             </button>
                         </div>
 
