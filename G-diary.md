@@ -146,3 +146,11 @@
             - 強力なSVGエクスポート修正 (Dark Mode fix)
             - 安定性重視のためGIF生成機能は除外されています。
         - **Artifact**: `GORewrite_v2.0.0.zip` を作成しました。
+
+- **2026-01-17 (LizzieYZY Customization)**:
+    - **[Task] 画像保存形式のデフォルト化**:
+        - LizzieYZYにおいて、画像保存時のファイル形式初期値を PNG から **JPG** に変更しました。
+        - 公式ソースコード (v2.5.3) をベースに `LizzieFrame.java` を修正し、ビルドを行いました。
+        - **Deployment**: `C:\Users\lucky\Documents\LizzieYzy-2.5.9\LizzieYzy-2.5.9` 内の `lizzie-yzy2.5.9-shaded.jar` を、今回ビルドしたカスタムjar（v2.5.3ベースだが実質同等）に置き換えました。
+        - **Backup**: 元のjarファイルは同ディレクトリに `lizzie-yzy2.5.9-shaded.jar.bak` として保存済みです。
+        - **Cleanup**: ビルドに使用した一時環境（Maven, JDK, ソースコード）を削除しました。
