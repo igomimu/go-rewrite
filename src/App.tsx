@@ -129,11 +129,12 @@ function App() {
     const [saveFileHandle, setSaveFileHandle] = useState<any>(null);
 
     // Drag State
-    type DragMode = 'SELECTING' | 'MOVING_STONE';
+    type DragMode = 'SELECTING' | 'MOVING_STONE' | 'MOVING_SELECTION';
     const [dragMode, setDragMode] = useState<DragMode>('SELECTING');
     const [isSelecting, setIsSelecting] = useState(false);
     const [selectionStart, setSelectionStart] = useState<{ x: number, y: number } | null>(null);
     const [selectionEnd, setSelectionEnd] = useState<{ x: number, y: number } | null>(null);
+    const [originalSelection, setOriginalSelection] = useState<{ start: { x: number, y: number }, end: { x: number, y: number } } | null>(null);
     const [moveSource, setMoveSource] = useState<{ x: number, y: number } | null>(null);
 
     const svgRef = useRef<SVGSVGElement>(null);
@@ -344,6 +345,23 @@ function App() {
 
     const handleDragStart = (x: number, y: number) => {
         dragStartRef.current = { x, y };
+
+        // Check if clicking inside existing selection
+        if (selectionStart && selectionEnd) {
+            const x1 = Math.min(selectionStart.x, selectionEnd.x);
+            const x2 = Math.max(selectionStart.x, selectionEnd.x);
+            const y1 = Math.min(selectionStart.y, selectionEnd.y);
+            const y2 = Math.max(selectionStart.y, selectionEnd.y);
+
+            if (x >= x1 && x <= x2 && y >= y1 && y <= y2) {
+                setDragMode('MOVING_SELECTION');
+                setMoveSource({ x, y });
+                setOriginalSelection({ start: selectionStart, end: selectionEnd });
+                setIsSelecting(true);
+                return;
+            }
+        }
+
         const stone = board[y - 1][x - 1];
         if (stone) {
             setDragMode('MOVING_STONE');
@@ -357,10 +375,75 @@ function App() {
         }
         setIsSelecting(true);
     };
-    const handleDragMove = (x: number, y: number) => { if (isSelecting) setSelectionEnd({ x, y }); };
+
+    const handleDragMove = (x: number, y: number) => {
+        if (!isSelecting) return;
+
+        if (dragMode === 'MOVING_SELECTION' && moveSource && originalSelection) {
+            const dx = x - moveSource.x;
+            const dy = y - moveSource.y;
+            // Update selection position
+            setSelectionStart({
+                x: originalSelection.start.x + dx,
+                y: originalSelection.start.y + dy
+            });
+            setSelectionEnd({
+                x: originalSelection.end.x + dx,
+                y: originalSelection.end.y + dy
+            });
+        } else {
+            setSelectionEnd({ x, y });
+        }
+    };
+
     const handleDragEnd = () => {
         setIsSelecting(false);
         if (!selectionStart || !selectionEnd) return;
+
+        if (dragMode === 'MOVING_SELECTION' && moveSource && originalSelection) {
+            const dx = selectionStart.x - originalSelection.start.x;
+            const dy = selectionStart.y - originalSelection.start.y;
+
+            if (dx !== 0 || dy !== 0) {
+                // Calculate original bounds
+                const ox1 = Math.min(originalSelection.start.x, originalSelection.end.x);
+                const ox2 = Math.max(originalSelection.start.x, originalSelection.end.x);
+                const oy1 = Math.min(originalSelection.start.y, originalSelection.end.y);
+                const oy2 = Math.max(originalSelection.start.y, originalSelection.end.y);
+
+                const newBoard = board.map(row => [...row]);
+                const stonesToMove: { stone: Stone, x: number, y: number }[] = [];
+
+                // Collect and remove from source
+                for (let y = oy1; y <= oy2; y++) {
+                    for (let x = ox1; x <= ox2; x++) {
+                        if (y >= 1 && y <= boardSize && x >= 1 && x <= boardSize) {
+                            const s = newBoard[y - 1][x - 1];
+                            if (s) {
+                                stonesToMove.push({ stone: s, x, y });
+                                newBoard[y - 1][x - 1] = null;
+                            }
+                        }
+                    }
+                }
+
+                // Place in target
+                stonesToMove.forEach(({ stone, x, y }) => {
+                    const nx = x + dx;
+                    const ny = y + dy;
+                    if (nx >= 1 && nx <= boardSize && ny >= 1 && ny <= boardSize) {
+                        newBoard[ny - 1][nx - 1] = stone;
+                    }
+                });
+
+                commitState(newBoard, nextNumber, activeColor, boardSize);
+            }
+
+            setMoveSource(null);
+            setOriginalSelection(null);
+            setTimeout(() => { dragStartRef.current = null; }, 0);
+            return;
+        }
 
         if (dragMode === 'MOVING_STONE' && moveSource) {
             const targetX = selectionEnd.x;
@@ -380,8 +463,6 @@ function App() {
                     // Numbered Mode
                     const stone = board[moveSource.y - 1][moveSource.x - 1];
 
-                    // Case A: Correcting the LAST move (Undo + Replay at new spot)
-                    // We rewrite the CURRENT history step instead of appending.
                     // Case A: Correcting the LAST move (Undo + Replay at new spot)
                     // We rewrite the CURRENT history step instead of appending.
                     if (stone && stone.number === nextNumber - 1 && currentMoveIndex > 0) {
