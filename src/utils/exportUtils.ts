@@ -90,6 +90,10 @@ export async function exportToPng(svgElement: SVGSVGElement, options: { scale?: 
     clone.setAttribute('width', `${width}px`);
     clone.setAttribute('height', `${height}px`);
 
+    // HOTFIX: Explicitly reset filters and color-scheme to defeat Dark Reader or other extensions
+    clone.style.filter = 'none';
+    clone.style.colorScheme = 'light';
+
     // 5. Handle Background Color (Explicit SVG Rect - same as exportToSvg)
     // Note: CSS backgroundColor is unreliable when serializing SVG to image
     const vb = clone.getAttribute('viewBox')!.split(' ').map(Number);
@@ -214,6 +218,10 @@ export async function exportToSvg(svgElement: SVGSVGElement, options: { backgrou
     clone.setAttribute('width', `${width}px`);
     clone.setAttribute('height', `${height}px`);
 
+    // HOTFIX: Explicitly reset filters and color-scheme to defeat Dark Reader or other extensions
+    clone.style.filter = 'none';
+    clone.style.colorScheme = 'light';
+
     // 5. Set background color (Explicit Rect for Word compatibility)
     // clone.style.backgroundColor = backgroundColor; // unreliable in Word
 
@@ -268,7 +276,7 @@ export async function exportToSvg(svgElement: SVGSVGElement, options: { backgrou
     // Note: Removing text/plain helps Word treat it purely as an image
     try {
         const svgBlob = new Blob([svgString], { type: 'image/svg+xml' });
-        // const textBlob = new Blob([svgString], { type: 'text/plain' }); // REMOVED
+        const textBlob = new Blob([svgString], { type: 'text/plain' });
 
         // Generate PNG (Level 3 scale for high quality)
         const pngBlob = await svgToPngBlob(clone, width, height, 3, backgroundColor);
@@ -278,7 +286,7 @@ export async function exportToSvg(svgElement: SVGSVGElement, options: { backgrou
 
         await navigator.clipboard.write([
             new ClipboardItem({
-                // 'text/plain': textBlob,
+                'text/plain': textBlob,
                 'image/svg+xml': svgBlob,
                 'image/png': pngBlob // Fallback for Chrome/Slack/etc
             })

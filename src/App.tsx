@@ -1242,6 +1242,8 @@ function App() {
         // Append Restored Stones
         const svgNS = "http://www.w3.org/2000/svg";
 
+        // Grid lines should extend to selection boundary (with padding)
+        // The coverRect in legend section will hide lines in the expanded area
         if (showCapturedInExport) {
             restoredStones.forEach(stone => {
                 if (stone.x < minX || stone.x > maxX || stone.y < minY || stone.y > maxY) return;
@@ -1337,7 +1339,8 @@ function App() {
             // 1. Create a "Cover Rect" to hide any board content below maxY
             //    The clone contains the full board. Expanding viewBox reveals hidden rows.
             //    We must cover them with the background color.
-            const coverY = MARGIN + (maxY * CELL_SIZE); // Bottom of the visual crop
+            // UNIFIED: Same formula as cropBottomY = center of last row + half cell
+            const coverY = MARGIN + (maxY - 1) * CELL_SIZE + (CELL_SIZE / 2);
             const coverHeight = 99999; // INCREASED: Arbitrary large height to cover everything below
 
             const coverRect = document.createElementNS(svgNS, 'rect');
@@ -1366,13 +1369,12 @@ function App() {
             // Relocate Footer to be visible in the cropped view
             const startX = MARGIN + (minX - 1) * CELL_SIZE - CELL_SIZE / 2 + (showCoordinates ? -25 : 0) + 10;
 
-            // Layout Legend below the cut
-            // Recalculate coverY locally or assume standard logic
-            const lastRowCenterY_Calc = MARGIN + (maxY - 1) * CELL_SIZE;
-            const coverY_Calc = lastRowCenterY_Calc + (CELL_SIZE / 2);
+            // UNIFIED CALCULATION: Bottom of the visual crop
+            // = Center of last row + half cell = edge of selection padding
+            const cropBottomY = MARGIN + (maxY - 1) * CELL_SIZE + (CELL_SIZE / 2);
 
             // Gap of 40px from the cover line
-            const startY = coverY_Calc + 40 + (showCoordinates ? 25 : 0);
+            const startY = cropBottomY + 40 + (showCoordinates ? 25 : 0);
 
             footerGroup.setAttribute('transform', `translate(${startX}, ${startY})`);
 
