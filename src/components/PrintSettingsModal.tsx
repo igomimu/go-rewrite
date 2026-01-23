@@ -18,6 +18,7 @@ export interface PrintSettings {
     footer: string;
     showFooter: boolean;
     colorMode: 'COLOR' | 'MONOCHROME';
+    layout: 'AUTO' | '1COL' | '2COL';
 }
 
 export const DEFAULT_SETTINGS: PrintSettings = {
@@ -36,7 +37,8 @@ export const DEFAULT_SETTINGS: PrintSettings = {
     headerFrequency: 'EVERY_PAGE',
     footer: '',
     showFooter: true,
-    colorMode: 'COLOR'
+    colorMode: 'COLOR',
+    layout: 'AUTO'
 };
 
 interface PrintSettingsModalProps {
@@ -162,11 +164,27 @@ const PrintSettingsModal: React.FC<PrintSettingsModalProps> = ({ isOpen, onClose
                             </label>
                         </div>
 
-                        <div className="flex justify-between items-center mb-2">
-                            <span className="text-xs">{t('print.figuresPerPage')}</span>
-                            <input type="number" className="w-12 border px-1 py-0.5 text-xs"
-                                aria-label={t('print.figuresPerPage')}
-                                value={settings.figuresPerPage} onChange={e => handleChange('figuresPerPage', parseInt(e.target.value) || 4)} />
+                        <div className="flex justify-between items-center mb-2 gap-2">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs">{t('print.figuresPerPage')}</span>
+                                <input type="number" className="w-12 border px-1 py-0.5 text-xs"
+                                    aria-label={t('print.figuresPerPage')}
+                                    value={settings.figuresPerPage} onChange={e => handleChange('figuresPerPage', parseInt(e.target.value) || 4)} />
+                            </div>
+
+                            {/* Layout Selection */}
+                            <div className="flex items-center gap-1">
+                                <span className="text-xs">{t('print.layout')}</span>
+                                <select
+                                    className="border border-gray-400 px-1 py-0.5 text-xs w-24"
+                                    value={settings.layout || 'AUTO'}
+                                    onChange={e => handleChange('layout', e.target.value as any)}
+                                >
+                                    <option value="AUTO">{t('print.layoutAuto') || 'Auto'}</option>
+                                    <option value="1COL">{t('print.layout1col')}</option>
+                                    <option value="2COL">{t('print.layout2col')}</option>
+                                </select>
+                            </div>
                         </div>
 
                         <div className="space-y-2 text-xs">

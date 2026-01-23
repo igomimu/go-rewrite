@@ -134,6 +134,11 @@ export const ja = {
     'print.preview': 'プレビュー',
     'print.showHide': '表示/非表示',
 
+    'print.layout': '配置',
+    'print.layout1col': '1列 (縦並び)',
+    'print.layout2col': '2列 (グリッド)',
+    'print.layoutAuto': '自動',
+
     // Variable labels
     'print.var.name': '名前',
     'print.var.date': '日付',

@@ -136,6 +136,11 @@ export const zh: Record<TranslationKey, string> = {
     'print.preview': '预览',
     'print.showHide': '显示/隐藏',
 
+    'print.layout': '布局',
+    'print.layout1col': '1列 (垂直)',
+    'print.layout2col': '2列 (网格)',
+    'print.layoutAuto': '自动',
+
     // Variable labels
     'print.var.name': '名称',
     'print.var.date': '日期',

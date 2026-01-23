@@ -136,6 +136,11 @@ export const en: Record<TranslationKey, string> = {
     'print.preview': 'Preview',
     'print.showHide': 'Show/Hide',
 
+    'print.layout': 'Layout',
+    'print.layout1col': '1 Column (Vertical)',
+    'print.layout2col': '2 Columns (Grid)',
+    'print.layoutAuto': 'Auto',
+
     // Variable labels
     'print.var.name': 'Name',
     'print.var.date': 'Date',

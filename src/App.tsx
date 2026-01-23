@@ -810,9 +810,27 @@ function App() {
         // But "Display Komi in the format 'コミ◯◯目半'" says the whole thing.
         // I will stick to: %KM% = "コミ6目半".
 
-        // Custom Game Result formatting
+        // Calculate Total Moves (Traverse to end of main branch)
+        // Calculate Total Moves (Traverse to end of main branch using RootNode)
+        // We use rootNode to ensure we engage the Global Main Line moves, as SGF Result usually applies to the main record.
+        // If we used history, and user was in a variation, we might calculate variation length.
+        // But usually "RE" in header is for the game.
+        // Let's stick to Main Line for consistency with "RE".
+        let totalMoves = 0;
+        let countingNode = rootNode;
+        while (countingNode.children && countingNode.children.length > 0) {
+            countingNode = countingNode.children[0];
+            // Only count if it's a move (has coordinates) or pass (x=0,y=0). Setup nodes might be tricky.
+            // In our system, all children of GameNode are moves (created by addMove).
+            if (countingNode.move) {
+                totalMoves++;
+            }
+        }
+
         const formatGameResult = (re: string) => {
-            if (!re) return '';
+            const prefix = totalMoves > 0 ? `${totalMoves}手完 ` : '';
+            if (!re) return prefix.trim();
+
             // Handle SGF standard B+R, W+3.5 etc
             const match = re.match(/^([BW])\+(.+)$/);
             if (match) {
@@ -831,11 +849,11 @@ function App() {
                         type = type + '目';
                     }
                 }
-                return `${winner}${type}勝ち`;
+                return `${prefix}${winner}${type}勝ち`;
             }
 
             // Fallback for manual text, just replace X.5 -> X目半 if it looks like a score
-            return re.replace(/(\d+)\.5/g, '$1目半');
+            return `${prefix}${re.replace(/(\d+)\.5/g, '$1目半')}`;
         };
 
         const bRankStr = bRankFormatted ? ` ${bRankFormatted}` : '';
@@ -853,6 +871,7 @@ function App() {
         s = s.replace(/%PWL%/g, wNameFormatted ? `白：${wNameFormatted}${wRankStr}` : '白番');
         s = s.replace(/%WR%/g, wRankFormatted);
         s = s.replace(/%RE%/g, formatGameResult(gameResult) || '');
+        s = s.replace(/%MOVES%/g, totalMoves > 0 ? `${totalMoves}手完` : '');
 
         // Komi Logic
         if (komi) {
@@ -2816,9 +2835,25 @@ function App() {
                             }
 
                             // Grid Class Logic
+                            // Grid Class Logic
                             const getGridClass = (count: number) => {
+                                const layout = printSettings.layout || 'AUTO';
+
+                                // Forced Layouts
+                                if (layout === '1COL') return "flex flex-col gap-4 h-full items-center justify-center";
+                                if (layout === '2COL') return "grid grid-cols-2 gap-x-4 gap-y-2 h-full items-center justify-items-center align-content-center";
+
+                                // Auto Logic
                                 if (count === 1) return "flex justify-center items-center h-full"; // Centered single
-                                if (count === 2) return "grid grid-rows-2 gap-4 h-full items-center justify-items-center"; // 2 Vertical
+                                if (count === 2) {
+                                    // Modified: Default to Side-by-Side (2 cols) for 2 items? 
+                                    // Old logic was Vertical. But Vertical prevents Landscape usage.
+                                    // Use grid-cols-2 for 2 items if we want side-by-side. 
+                                    // But if they are tall boards, they get small.
+                                    // Let's keep Vertical as default for Auto (Backward Compat + Portrait safety),
+                                    // User can switch to 2COL for Landscape.
+                                    return "grid grid-rows-2 gap-4 h-full items-center justify-items-center"; // 2 Vertical
+                                }
                                 // For 4, 6 etc:
                                 return "grid grid-cols-2 gap-x-4 gap-y-2 h-full items-center justify-items-center align-content-center";
                             };
@@ -2827,9 +2862,30 @@ function App() {
                             // A4 is roughly 210mm x 297mm.
                             // 2 cols means max width ~45%.
                             const getItemStyle = (count: number) => {
-                                if (count === 1) return { width: '80%', maxWidth: '800px' };
-                                if (count === 2) return { width: '60%', maxWidth: '600px' };
-                                return { width: '95%', maxWidth: '400px' }; // Tight fit for 4-up
+                                const layout = printSettings.layout || 'AUTO';
+                                const isTwoCol = layout === '2COL' || (layout === 'AUTO' && count >= 3); // Auto 2 uses vertical (1 col effective width)
+
+                                if (isTwoCol) {
+                                    // Dynamic resizing for high density (3 Rows: 5 or 6 items)
+                                    if (count >= 5) {
+                                        // 3 rows need to fit.
+                                        // Safe limit: 260px.
+                                        return { width: '90%', maxWidth: '260px' };
+                                    }
+                                    // 2 Rows (3 or 4 items)
+                                    // 480px was too large for some margins (960px height).
+                                    // Reduced to 400px (800px height) to be safe.
+                                    return { width: '95%', maxWidth: '400px' };
+                                }
+
+                                // Single Column (1 item or Vertical Stack)
+                                if (count === 2 && layout === 'AUTO') {
+                                    // Vertical Stack: Limits are vertical mostly
+                                    return { width: '60%', maxWidth: '550px' };
+                                }
+
+                                // Default Single
+                                return { width: '90%', maxWidth: '800px' };
                             };
 
                             return chunks.map((chunk, pageIdx) => {
