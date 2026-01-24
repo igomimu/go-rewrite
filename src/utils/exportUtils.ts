@@ -61,9 +61,12 @@ function normalizeSvgColors(svgElement: SVGSVGElement): void {
  * - Accept optional backgroundColor.
  * - Remove elements marked with data-export-ignore="true" (like selection rect).
  */
-export async function exportToPng(svgElement: SVGSVGElement, options: { scale?: number, backgroundColor?: string, destination?: 'CLIPBOARD' | 'DOWNLOAD', filename?: string } = {}): Promise<void> {
-    // Default filename empty to allow Save As dialog to handle it (or use browser default)
-    const { scale = 1, backgroundColor = '#DCB35C', destination = 'CLIPBOARD', filename = '' } = options;
+/**
+ * Prepares an SVG element for export by cloning, cleaning, and applying necessary styles.
+ * This ensures "Dark Mode hardening" and Word compatibility.
+ */
+export function prepareSvgForExport(svgElement: SVGSVGElement, options: { backgroundColor?: string } = {}): SVGSVGElement {
+    const { backgroundColor = '#DCB35C' } = options;
 
     // 1. Clone the SVG to manipulate it without affecting the DOM
     const clone = svgElement.cloneNode(true) as SVGSVGElement;
@@ -73,10 +76,12 @@ export async function exportToPng(svgElement: SVGSVGElement, options: { scale?: 
     ignoredElements.forEach(el => el.remove());
 
     // 3. Get the crop aspect ratio / dimensions from viewBox
-    let width, height;
+    let width, height, minX = 0, minY = 0;
 
     if (clone.getAttribute('viewBox')) {
         const vb = clone.getAttribute('viewBox')!.split(' ').map(Number);
+        minX = vb[0];
+        minY = vb[1];
         width = vb[2];
         height = vb[3];
     } else {
@@ -94,17 +99,34 @@ export async function exportToPng(svgElement: SVGSVGElement, options: { scale?: 
     clone.style.filter = 'none';
     clone.style.colorScheme = 'light';
 
-    // 5. Handle Background Color (Explicit SVG Rect - same as exportToSvg)
-    // Note: CSS backgroundColor is unreliable when serializing SVG to image
-    const vb = clone.getAttribute('viewBox')!.split(' ').map(Number);
-    const [minX, minY, vbWidth, vbHeight] = vb;
+    // SVG Cleanup: Remove all class attributes and style tags (Clean Slate)
+    const allElements = clone.querySelectorAll('*');
+    allElements.forEach(el => el.removeAttribute('class'));
+    clone.removeAttribute('class');
+    const styleTags = clone.querySelectorAll('style');
+    styleTags.forEach(el => el.remove());
+
+    // 5. Handle Background Color
+    // Fix Background Color for Word:
+    // Word treats pure #FFFFFF as "transparent" sometimes. Use #FEFEFE (Off-white) to force rendering.
+    let finalBgColor = backgroundColor || "#FEFEFE";
+    if (finalBgColor.toLowerCase() === '#ffffff' || finalBgColor.toLowerCase() === 'white') {
+        finalBgColor = '#FEFEFE';
+    }
 
     const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
     bgRect.setAttribute("x", String(minX));
     bgRect.setAttribute("y", String(minY));
-    bgRect.setAttribute("width", String(vbWidth));
-    bgRect.setAttribute("height", String(vbHeight));
-    bgRect.setAttribute("fill", backgroundColor);
+    bgRect.setAttribute("width", String(width));
+    bgRect.setAttribute("height", String(height));
+    bgRect.setAttribute("fill", finalBgColor);
+
+    // Word Compatibility: Explicit inline styles
+    bgRect.style.fill = finalBgColor;
+    bgRect.style.stroke = "none";
+
+    // Word Compatibility: Set background on root (sometimes helps)
+    clone.style.backgroundColor = finalBgColor;
 
     // Insert as first child to be behind all content
     if (clone.firstChild) {
@@ -115,6 +137,29 @@ export async function exportToPng(svgElement: SVGSVGElement, options: { scale?: 
 
     // Word sometimes remaps named colors on re-open; force explicit hex values.
     normalizeSvgColors(clone);
+
+    return clone;
+}
+
+/**
+ * Exports an SVG element to the system clipboard as a PNG image.
+ * Uses a Canvas to rasterize the SVG at a high resolution.
+ * 
+ * FIX v22:
+ * - Accept optional backgroundColor.
+ * - Remove elements marked with data-export-ignore="true" (like selection rect).
+ */
+export async function exportToPng(svgElement: SVGSVGElement, options: { scale?: number, backgroundColor?: string, destination?: 'CLIPBOARD' | 'DOWNLOAD', filename?: string } = {}): Promise<void> {
+    // Default filename empty to allow Save As dialog to handle it (or use browser default)
+    const { scale = 1, backgroundColor = '#DCB35C', destination = 'CLIPBOARD', filename = '' } = options;
+
+    // 1. Prepare SVG
+    const clone = prepareSvgForExport(svgElement, { backgroundColor });
+
+    // Dimension extraction (Duplicate from prepare logic, but needed for canvas sizing)
+    // We can trust the clone has correct width/height attrs now.
+    const width = parseFloat(clone.getAttribute('width') || '0');
+    const height = parseFloat(clone.getAttribute('height') || '0');
 
     // 6. Generate PNG Blob (Shared Logic)
     try {
@@ -193,74 +238,13 @@ export async function svgToPngBlob(svgElement: SVGSVGElement, width: number, hei
 export async function exportToSvg(svgElement: SVGSVGElement, options: { backgroundColor?: string, destination?: 'CLIPBOARD' | 'DOWNLOAD', filename?: string } = {}): Promise<void> {
     // Default filename empty
     const { backgroundColor = '#DCB35C', destination = 'CLIPBOARD', filename = '' } = options;
-    const clone = svgElement.cloneNode(true) as SVGSVGElement;
 
-    // Remove "data-export-ignore" elements
-    const ignoredElements = clone.querySelectorAll('[data-export-ignore="true"]');
-    ignoredElements.forEach(el => el.remove());
+    // 1. Prepare SVG
+    const clone = prepareSvgForExport(svgElement, { backgroundColor });
 
-    // 3. Get the crop aspect ratio / dimensions from viewBox
-    let width, height, minX = 0, minY = 0;
-    if (clone.getAttribute('viewBox')) {
-        const vb = clone.getAttribute('viewBox')!.split(' ').map(Number);
-        minX = vb[0];
-        minY = vb[1];
-        width = vb[2];
-        height = vb[3];
-    } else {
-        const bBox = svgElement.getBoundingClientRect();
-        width = bBox.width;
-        height = bBox.height;
-        clone.setAttribute('viewBox', `0 0 ${width} ${height}`);
-    }
-
-    // 4. FORCE Width/Height Attributes to match viewBox (Pixels)
-    clone.setAttribute('width', `${width}px`);
-    clone.setAttribute('height', `${height}px`);
-
-    // HOTFIX: Explicitly reset filters and color-scheme to defeat Dark Reader or other extensions
-    clone.style.filter = 'none';
-    clone.style.colorScheme = 'light';
-
-    // 5. Set background color (Explicit Rect for Word compatibility)
-    // clone.style.backgroundColor = backgroundColor; // unreliable in Word
-
-    // SVG Cleanup: Remove all class attributes and style tags
-    const allElements = clone.querySelectorAll('*');
-    allElements.forEach(el => el.removeAttribute('class'));
-    clone.removeAttribute('class');
-    const styleTags = clone.querySelectorAll('style');
-    styleTags.forEach(el => el.remove());
-
-    // Fix Background Color for Word:
-    // Word treats pure #FFFFFF as "transparent" sometimes. Use #FEFEFE (Off-white) to force rendering.
-    let finalBgColor = backgroundColor || "#FEFEFE";
-    if (finalBgColor.toLowerCase() === '#ffffff' || finalBgColor.toLowerCase() === 'white') {
-        finalBgColor = '#FEFEFE';
-    }
-
-    const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    bgRect.setAttribute("x", String(minX));
-    bgRect.setAttribute("y", String(minY));
-    bgRect.setAttribute("width", String(width));
-    bgRect.setAttribute("height", String(height));
-    bgRect.setAttribute("fill", finalBgColor);
-    // Word Compatibility: Explicit inline styles
-    bgRect.style.fill = finalBgColor;
-    bgRect.style.stroke = "none";
-
-    // Word Compatibility: Set background on root (sometimes helps)
-    clone.style.backgroundColor = finalBgColor;
-
-    // Insert as first child
-    if (clone.firstChild) {
-        clone.insertBefore(bgRect, clone.firstChild);
-    } else {
-        clone.appendChild(bgRect);
-    }
-
-    // Word sometimes remaps named colors on re-open; force explicit hex values.
-    normalizeSvgColors(clone);
+    // Dimension extraction
+    const width = parseFloat(clone.getAttribute('width') || '0');
+    const height = parseFloat(clone.getAttribute('height') || '0');
 
     // 6. Serialize
     const serializer = new XMLSerializer();
@@ -320,7 +304,7 @@ export async function saveFile(blob: Blob, filename: string, typeDescription: st
                 id: 'gorewrite-export', // specific ID to remember location
                 types: [{
                     description: typeDescription,
-                    accept: { [mimeType]: ['.' + (filename ? filename.split('.').pop() : (mimeType.includes('png') ? 'png' : 'svg'))] }
+                    accept: { [mimeType]: ['.' + (filename ? filename.split('.').pop() : (mimeType.includes('png') ? 'png' : (mimeType.includes('gif') ? 'gif' : 'svg')))] }
                 }]
             };
             // Only set suggestedName if explicitly provided and not empty.
@@ -355,8 +339,15 @@ export async function saveFile(blob: Blob, filename: string, typeDescription: st
                     saveAs: true, // FORCE "Save As" dialog
                     conflictAction: 'overwrite'
                 };
-                // Only set filename if provided (allows empty for Save As to manage)
-                if (filename) downloadOptions.filename = filename;
+                // Only set filename if provided.
+                // Fallback: If empty, Chrome uses Blob UUID. To avoid this, force a safe default.
+                if (filename) {
+                    downloadOptions.filename = filename;
+                } else {
+                    // Force default to avoid UUID "876b..."
+                    const ext = mimeType.includes('gif') ? 'gif' : (mimeType.includes('svg') ? 'svg' : 'png');
+                    downloadOptions.filename = `game.${ext}`;
+                }
 
                 chrome.downloads.download(downloadOptions, (downloadId: number) => {
                     if (chrome.runtime.lastError) {
@@ -391,4 +382,37 @@ export async function saveFile(blob: Blob, filename: string, typeDescription: st
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
+}
+
+// Helper: Pre-emptively pick a file handle (Must be called during user activation)
+export async function promptSaveFile(mimeType: string, filename: string): Promise<any | null> {
+    if (!('showSaveFilePicker' in window)) return null;
+
+    try {
+        const typeDescription = mimeType.split('/')[1].toUpperCase() + ' File';
+        const pickerOptions: any = {
+            id: 'gorewrite-export',
+            types: [{
+                description: typeDescription,
+                accept: { [mimeType]: ['.' + (filename ? filename.split('.').pop() : (mimeType.includes('png') ? 'png' : (mimeType.includes('gif') ? 'gif' : 'svg')))] }
+            }]
+        };
+        if (filename) pickerOptions.suggestedName = filename;
+
+        // @ts-ignore
+        const handle = await window.showSaveFilePicker(pickerOptions);
+        return handle;
+    } catch (e) {
+        if ((e as Error).name === 'AbortError') throw e; // Re-throw cancellation
+        console.warn("FilePicker Prompt Failed:", e);
+        return null;
+    }
+}
+
+// Helper: Write blob to existing handle
+export async function writeToHandle(handle: any, blob: Blob) {
+    // @ts-ignore
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
 }

@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom'
 import GoBoard, { ViewRange, BoardState, StoneColor, Marker, Stone } from './components/GoBoard'
 import GameInfoModal from './components/GameInfoModal'
 import PrintSettingsModal, { PrintSettings } from './components/PrintSettingsModal'
-import { exportToPng, exportToSvg, svgToPngBlob, saveFile } from './utils/exportUtils'
+import { exportToPng, exportToSvg, svgToPngBlob, saveFile, prepareSvgForExport, promptSaveFile, writeToHandle } from './utils/exportUtils'
 import { createGifFromImages } from './utils/gifExportUtils'
 import { checkCaptures } from './utils/gameLogic'
 import { parseSGFTree, generateSGFTree, SgfTreeNode } from './utils/sgfUtils'
@@ -106,6 +106,26 @@ function App() {
     const [showCapturedInExport, setShowCapturedInExport] = useState(false);
     const [isExportingGif, setIsExportingGif] = useState(false);
     const [gifProgress, setGifProgress] = useState(0);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [playbackSpeed, setPlaybackSpeed] = useState(800); // ms per move (Default 0.8s)
+
+    // Auto-Play Effect
+    useEffect(() => {
+        let intervalId: any;
+        if (isPlaying) {
+            intervalId = setInterval(() => {
+                // Determine if we can step forward
+                // calculate "next"
+                if (currentState.children.length > 0) {
+                    setCurrentNodeId(currentState.children[0].id);
+                } else {
+                    // Stop if no more moves
+                    setIsPlaying(false);
+                }
+            }, playbackSpeed);
+        }
+        return () => clearInterval(intervalId);
+    }, [isPlaying, currentState, playbackSpeed]);
 
     // Version Display Logic
     const [displayVersion, setDisplayVersion] = useState(`v${APP_VERSION}`);
@@ -141,6 +161,13 @@ function App() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const dragStartRef = useRef<{ x: number, y: number } | null>(null);
     const hoveredCellRef = useRef<{ x: number, y: number } | null>(null);
+
+    // GIF Export Refs
+    const gifTargetNodesRef = useRef<GameNode[]>([]);
+    const gifFramesRef = useRef<string[]>([]);
+    const originalNodeIdRef = useRef<string>('');
+    const gifFileHandleRef = useRef<any>(null);
+    const [gifExportIndex, setGifExportIndex] = useState<number>(-1);
 
     // Replaced commitState with Tree Logic
     const commitState = (newBoard: BoardState, newNextNumber: number, newActiveColor: StoneColor, newSize: number, newMarkers?: Marker[], move?: { x: number, y: number, color: StoneColor }) => {
@@ -1671,59 +1698,137 @@ function App() {
 
     const handleExportGif = useCallback(async () => {
         if (!svgRef.current) return;
+
+        // --- Pre-Save Dialog (Must happen during user activation) ---
+        let handle = null;
+        try {
+            // Force empty filename preference
+            handle = await promptSaveFile('image/gif', '');
+            if (!handle && !('showSaveFilePicker' in window)) {
+                // Not supported, proceed to old flow
+            } else if (!handle) {
+                return; // User Cancelled
+            }
+        } catch (e) {
+            return; // User Cancelled
+        }
+
+        gifFileHandleRef.current = handle;
+
+        // Stop any active auto-play
+        setIsPlaying(false);
         setIsExportingGif(true);
         setGifProgress(0);
 
-        const originalNodeId = currentNodeId;
-        const frames: string[] = [];
+        // Initialize Export State
+        originalNodeIdRef.current = currentNodeId;
 
-        try {
-            // Step-by-step frame capture
-            for (let i = 0; i < history.length; i++) {
-                // Force sync update for frame capture
-                flushSync(() => {
-                    setCurrentNodeId(history[i].id);
-                });
+        // Calculate sequence: History + Future (Main Branch)
+        const sequence: GameNode[] = [...history];
+        let node = currentState;
+        while (node.children.length > 0) {
+            node = node.children[0];
+            sequence.push(node);
+        }
+        gifTargetNodesRef.current = sequence;
+        gifFramesRef.current = [];
 
-                const svg = svgRef.current;
-                const vb = svg.getAttribute('viewBox')!.split(' ').map(Number);
-                const width = vb[2];
-                const height = vb[3];
+        // Start State Machine (triggers useEffect via state change)
+        setGifExportIndex(0);
 
-                const blob = await svgToPngBlob(svg, width, height, 1.5, '#DCB35C');
-                const dataUrl = await new Promise<string>((resolve) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result as string);
-                    reader.readAsDataURL(blob);
-                });
-                frames.push(dataUrl);
+    }, [currentNodeId, history, svgRef]);
+
+    // State-Driven GIF Export Effect
+    useEffect(() => {
+        if (!isExportingGif || gifExportIndex === -1) return;
+
+        const targetNodes = gifTargetNodesRef.current;
+        const total = targetNodes.length;
+
+        // --- Completion Check ---
+        if (gifExportIndex >= total) {
+            // Finished Capturing. Proceed to Compilation.
+            const compile = async () => {
+                try {
+                    const frames = gifFramesRef.current;
+                    const gifDataUrl = await createGifFromImages(frames, {
+                        width: 600,
+                        height: 600,
+                        interval: playbackSpeed / 1000,
+                        progressCallback: (p) => setGifProgress(50 + Math.round(p * 50)),
+                    });
+
+                    // Conversion and Save
+                    const gifBlob = await (await fetch(gifDataUrl)).blob();
+
+
+
+                    if (gifFileHandleRef.current) {
+                        // Use the pre-selected handle
+                        await writeToHandle(gifFileHandleRef.current, gifBlob);
+                        alert("保存しました。");
+                    } else {
+                        // Fallback (Old Flow: chrome.downloads)
+                        // If we fall back here, we USE the filename logic in exportUtils (game.gif if empty)
+                        // This handles non-supported browsers or failed pickers safely.
+                        await saveFile(gifBlob, '', 'GIF Animation', 'image/gif');
+                    }
+                } catch (err) {
+                    console.error("GIF Compilation Error:", err);
+                    alert("GIFの作成に失敗しました。");
+                } finally {
+                    // Restore Original State
+                    setCurrentNodeId(originalNodeIdRef.current);
+                    setIsExportingGif(false);
+                    setGifProgress(0);
+                    setGifExportIndex(-1);
+                }
+            };
+            compile();
+            return;
+        }
+
+        // --- Capture Step ---
+        const step = async () => {
+            // Update Progress
+            setGifProgress(Math.round((gifExportIndex / total) * 50));
+
+            // Set Board State
+            setCurrentNodeId(targetNodes[gifExportIndex].id);
+
+            // Wait for Render + Playback Delay
+            await new Promise(r => setTimeout(r, Math.max(200, playbackSpeed)));
+
+            // Capture
+            if (svgRef.current) {
+                try {
+                    const svg = svgRef.current;
+                    const preparedSvg = prepareSvgForExport(svg, { backgroundColor: '#DCB35C' });
+                    const width = parseFloat(preparedSvg.getAttribute('width') || '0');
+                    const height = parseFloat(preparedSvg.getAttribute('height') || '0');
+                    const blob = await svgToPngBlob(preparedSvg, width, height, 1.5, '#DCB35C');
+                    const dataUrl = await new Promise<string>((resolve) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result as string);
+                        reader.readAsDataURL(blob);
+                    });
+                    gifFramesRef.current.push(dataUrl);
+                } catch (e) {
+                    console.error("Frame Capture Error", e);
+                }
             }
 
-            // Restore state
-            flushSync(() => {
-                setCurrentNodeId(originalNodeId);
-            });
+            // Allow interrupt
+            if (!isExportingGif) return;
 
-            // Compilation
-            const gifDataUrl = await createGifFromImages(frames, {
-                width: 600,
-                height: 600,
-                interval: 0.3, // Faster than 0.5 for better flow
-                progressCallback: (p) => setGifProgress(Math.round(p * 100)),
-            });
+            // Next Frame
+            setGifExportIndex(prev => prev + 1);
+        };
 
-            // Conversion and Save
-            const gifBlob = await (await fetch(gifDataUrl)).blob();
-            await saveFile(gifBlob, 'sgf_animation.gif', 'GIF Animation', 'image/gif');
+        const timer = setTimeout(step, 0);
+        return () => clearTimeout(timer);
 
-        } catch (err) {
-            console.error("GIF Export Error:", err);
-            alert("GIFの作成に失敗しました。");
-        } finally {
-            setIsExportingGif(false);
-            setGifProgress(0);
-        }
-    }, [history, currentNodeId, svgRef]);
+    }, [gifExportIndex, isExportingGif, playbackSpeed]);
 
 
 
@@ -2190,22 +2295,11 @@ function App() {
                     </div>
                 )}
 
-                {/* Progress Overlay for GIF Export */}
+                {/* Recording Indicator (Non-blocking) */}
                 {isExportingGif && (
-                    <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-40 backdrop-blur-sm">
-                        <div className="bg-white p-6 rounded-xl shadow-2xl flex flex-col items-center gap-4 border border-indigo-100">
-                            <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-                            <div className="flex flex-col items-center">
-                                <span className="font-bold text-gray-800">{t('ui.exportingGif')}</span>
-                                <span className="text-sm text-gray-500">{gifProgress}%</span>
-                            </div>
-                            <div className="w-48 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                <div
-                                    className="h-full bg-indigo-600 transition-all duration-300"
-                                    style={{ width: `${gifProgress}%` }}
-                                ></div>
-                            </div>
-                        </div>
+                    <div className="absolute top-4 right-4 z-[100] bg-red-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 animate-pulse">
+                        <div className="w-3 h-3 bg-white rounded-full"></div>
+                        <span className="font-bold text-sm">{t('ui.exportingGif')} {gifProgress}%</span>
                     </div>
                 )}
 
@@ -2374,38 +2468,36 @@ function App() {
                                         <div className="text-xs text-gray-500">{t('help.clickDesc')}</div>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-6 text-center text-xl">🖱️</div>
-                                    <div>
-                                        <div className="font-bold">{t('help.drag')}</div>
-                                        <div className="text-xs text-gray-500">{t('help.dragDesc')}</div>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-6 text-center text-xl">⚙️</div>
-                                    <div>
-                                        <div className="font-bold">{t('help.wheel')}</div>
-                                        <div className="text-xs text-gray-500">{t('help.wheelDesc')}</div>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-6 text-center text-xs font-mono border rounded bg-gray-100">Ctrl+F</div>
-                                    <div>
-                                        <div className="font-bold">{t('help.copy')}</div>
-                                        <div className="text-xs text-gray-500">{t('help.copyDesc')}</div>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <div className="w-6 text-center text-xs font-mono border rounded bg-gray-100">Ctrl+V</div>
-                                    <div>
-                                        <div className="font-bold">{t('help.sgfPaste')}</div>
-                                        <div className="text-xs text-gray-500">{t('help.sgfPasteDesc')}</div>
-                                    </div>
+                                <div className="w-6 text-center text-xl">⚙️</div>
+                                <div>
+                                    <div className="font-bold">{t('help.wheel')}</div>
+                                    <div className="text-xs text-gray-500">{t('help.wheelDesc')}</div>
                                 </div>
                             </div>
-                            <div className="mt-6 text-center text-xs text-gray-400">
-                                GORewrite {displayVersion}
+                            <div className="flex items-center gap-3">
+                                <div className="w-6 text-center text-xl">⚙️</div>
+                                <div>
+                                    <div className="font-bold">{t('help.wheel')}</div>
+                                    <div className="text-xs text-gray-500">{t('help.wheelDesc')}</div>
+                                </div>
                             </div>
+                            <div className="flex items-center gap-3">
+                                <div className="w-6 text-center text-xs font-mono border rounded bg-gray-100">Ctrl+F</div>
+                                <div>
+                                    <div className="font-bold">{t('help.copy')}</div>
+                                    <div className="text-xs text-gray-500">{t('help.copyDesc')}</div>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="w-6 text-center text-xs font-mono border rounded bg-gray-100">Ctrl+V</div>
+                                <div>
+                                    <div className="font-bold">{t('help.sgfPaste')}</div>
+                                    <div className="text-xs text-gray-500">{t('help.sgfPasteDesc')}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="mt-6 text-center text-xs text-gray-400">
+                            GORewrite {displayVersion}
                         </div>
                     </div>
                 )}
@@ -2672,7 +2764,35 @@ function App() {
                             <button onClick={stepLast} disabled={currentState.children.length === 0} title={t('tooltip.lastMove')} className="w-7 h-7 rounded bg-white hover:bg-gray-50 text-gray-600 disabled:opacity-50 flex items-center justify-center font-bold text-xs shadow-sm border border-gray-200">
                                 &gt;|
                             </button>
+
+                            {/* Play/Pause Button */}
+                            <button
+                                onClick={() => setIsPlaying(!isPlaying)}
+                                disabled={currentState.children.length === 0 && !isPlaying}
+                                className={`w-7 h-7 rounded flex items-center justify-center font-bold text-sm shadow-sm border transition-all ml-2
+                                ${isPlaying
+                                        ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
+                                        : 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100'
+                                    } disabled:opacity-50 disabled:bg-gray-50 disabled:text-gray-400`}
+                                title={isPlaying ? 'Stop Auto-Play' : 'Start Auto-Play'}
+                            >
+                                {isPlaying ? '⏸' : '▶'}
+                            </button>
                         </div>
+
+                        {/* Speed Control */}
+                        <select
+                            title="Playback Speed"
+                            value={playbackSpeed}
+                            onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
+                            style={{ height: '28px' }} // Explicit height to match buttons
+                            className="text-xs border border-gray-200 rounded px-1 w-16 text-center cursor-pointer hover:bg-gray-50 ml-1 bg-white"
+                        >
+                            <option value="2000">Slow</option>
+                            <option value="800">Normal</option>
+                            <option value="400">Fast</option>
+                            <option value="100">Max</option>
+                        </select>
 
                         {/* Branch Candidates (if multiple branches exist) */}
                         {branchCandidates.length > 1 && (
@@ -2751,8 +2871,9 @@ function App() {
                     <div>DblClick: Swap Color / Switch Tool</div>
                     <div>**Ctrl+V: Paste SGF**</div>
                 </div>
-            </div>
+            </div >
 
+            {/* Actual Print Content (Moved Outside Main Div) */}
             {/* Actual Print Content (Moved Outside Main Div) */}
             <div className={isPrintJob ? "block w-full font-serif text-sm bg-white" : "hidden print:block w-full font-serif text-sm bg-white"}>
                 {isPrintJob && (
@@ -2765,189 +2886,194 @@ function App() {
                             Close
                         </button>
                     </div>
-                )}
+                )
+                }
 
                 {/* Mode A: Current Board */}
-                {(!printSettings || printSettings.pagingType === 'CURRENT') && (
-                    <div className="flex flex-col items-center w-full min-h-screen pt-12 print:pt-0">
-                        {/* Header Area */}
-                        <div className="w-full mb-4 text-center">
-                            {(printSettings?.showTitle !== false) && (
-                                <h1 className="text-2xl font-bold mb-1">{formatPrintString(printSettings?.title || '%GN%')}</h1>
-                            )}
-                            {(printSettings?.showSubTitle !== false) && (
-                                <h2 className="text-lg text-gray-600">{formatPrintString(printSettings?.subTitle || '%DT%')}</h2>
-                            )}
-                            {(printSettings?.showHeader !== false) && (
-                                <div className="text-right text-xs text-gray-500 mt-2 border-b border-gray-400">
-                                    {formatPrintString(printSettings?.header || '')}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Board */}
-                        <div className="w-[80vw] h-[80vw] max-w-[800px] max-h-[800px] flex justify-center border-0 border-transparent mb-4">
-                            <GoBoard
-                                boardState={board}
-                                boardSize={boardSize}
-                                showCoordinates={printSettings?.showCoordinate ?? showCoordinates}
-                                showNumbers={printSettings?.showMoveNumber ?? showNumbers}
-                                markers={history[currentMoveIndex]?.markers || []}
-                                onCellClick={() => { }}
-                                onCellRightClick={() => { }}
-                                onBoardWheel={() => { }}
-                                onCellMouseEnter={() => { }}
-                                onCellMouseLeave={() => { }}
-                                onDragStart={() => { }}
-                                onDragMove={() => { }}
-                                selectionStart={null}
-                                isMonochrome={printSettings?.colorMode === 'MONOCHROME'}
-                                readOnly={true}
-                            />
-                        </div>
-
-                        {/* Footer */}
-                        <div className="w-full text-center text-xs mt-auto pb-4">
-                            {(printSettings?.showFooter !== false) && formatPrintString(printSettings?.footer || '')}
-                        </div>
-                    </div>
-                )}
-
-                {/* Mode B: Whole File */}
-                {/* Mode B: Whole File */}
-                {(printSettings?.pagingType === 'WHOLE_FILE_FIGURE' || printSettings?.pagingType === 'WHOLE_FILE_MOVE') && (
-                    <div className="flex flex-col items-center w-full pt-12 print:pt-0">
-                        {(() => {
-                            // Calculate Full History from Current Node to End of Variation
-                            let leaf = history[history.length - 1];
-                            while (leaf.children && leaf.children.length > 0) {
-                                leaf = leaf.children[0];
-                            }
-                            const printHistory = [];
-                            let curr: import('./utils/treeUtilsV2').GameNode | null = leaf;
-                            while (curr) { printHistory.unshift(curr); curr = curr.parent; }
-
-                            const figures = generatePrintFigures(printHistory, printSettings.movesPerFigure);
-                            const perPage = printSettings.figuresPerPage || 4;
-                            const chunks = [];
-                            for (let i = 0; i < figures.length; i += perPage) {
-                                chunks.push(figures.slice(i, i + perPage));
-                            }
-
-                            // Grid Class Logic
-                            // Grid Class Logic
-                            const getGridClass = (count: number) => {
-                                const layout = printSettings.layout || 'AUTO';
-
-                                // Forced Layouts
-                                if (layout === '1COL') return "flex flex-col gap-4 h-full items-center justify-center";
-                                if (layout === '2COL') return "grid grid-cols-2 gap-x-4 gap-y-2 h-full items-center justify-items-center align-content-center";
-
-                                // Auto Logic
-                                if (count === 1) return "flex justify-center items-center h-full"; // Centered single
-                                if (count === 2) {
-                                    // Modified: Default to Side-by-Side (2 cols) for 2 items? 
-                                    // Old logic was Vertical. But Vertical prevents Landscape usage.
-                                    // Use grid-cols-2 for 2 items if we want side-by-side. 
-                                    // But if they are tall boards, they get small.
-                                    // Let's keep Vertical as default for Auto (Backward Compat + Portrait safety),
-                                    // User can switch to 2COL for Landscape.
-                                    return "grid grid-rows-2 gap-4 h-full items-center justify-items-center"; // 2 Vertical
-                                }
-                                // For 4, 6 etc:
-                                return "grid grid-cols-2 gap-x-4 gap-y-2 h-full items-center justify-items-center align-content-center";
-                            };
-
-                            // Item Max Width Logic (to fit page)
-                            // A4 is roughly 210mm x 297mm.
-                            // 2 cols means max width ~45%.
-                            const getItemStyle = (count: number) => {
-                                const layout = printSettings.layout || 'AUTO';
-                                const isTwoCol = layout === '2COL' || (layout === 'AUTO' && count >= 3); // Auto 2 uses vertical (1 col effective width)
-
-                                if (isTwoCol) {
-                                    // Dynamic resizing for high density (3 Rows: 5 or 6 items)
-                                    if (count >= 5) {
-                                        // 3 rows need to fit.
-                                        // Safe limit: 260px.
-                                        return { width: '90%', maxWidth: '260px' };
-                                    }
-                                    // 2 Rows (3 or 4 items)
-                                    // 480px was too large for some margins (960px height).
-                                    // Reduced to 400px (800px height) to be safe.
-                                    return { width: '95%', maxWidth: '400px' };
-                                }
-
-                                // Single Column (1 item or Vertical Stack)
-                                if (count === 2 && layout === 'AUTO') {
-                                    // Vertical Stack: Limits are vertical mostly
-                                    return { width: '60%', maxWidth: '550px' };
-                                }
-
-                                // Default Single
-                                return { width: '90%', maxWidth: '800px' };
-                            };
-
-                            return chunks.map((chunk, pageIdx) => {
-                                const showHeader = printSettings.headerFrequency === 'EVERY_PAGE' || pageIdx === 0;
-
-                                return (
-                                    <div key={pageIdx} className="page-break w-full min-h-screen p-4 box-border flex flex-col justify-center">
-                                        {/* Page Header */}
-                                        {showHeader && (
-                                            <div className="w-full mb-4 text-center">
-                                                <h1 className="text-xl font-bold mb-1">{formatPrintString(printSettings.title, pageIdx + 1)}</h1>
-                                                {printSettings.subTitle && <h2 className="text-sm text-gray-600">{formatPrintString(printSettings.subTitle, pageIdx + 1)}</h2>}
-                                                <div className="text-right text-xs text-gray-500 mt-2 border-b border-gray-400">
-                                                    {formatPrintString(printSettings.header, pageIdx + 1)}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <div className={`${getGridClass(perPage)} w-full flex-grow`}>
-                                            {chunk.map((fig, i) => (
-                                                <div key={i} className="flex flex-col items-center w-full" style={getItemStyle(perPage)}>
-
-                                                    {/* Figure Info */}
-                                                    <div className="w-full text-center font-bold text-xs mb-1">
-                                                        第{(pageIdx * perPage) + i + 1}図 ({fig.moveRangeStart}-{fig.moveRangeEnd})
-                                                    </div>
-
-                                                    {/* Board */}
-                                                    <div className="w-full aspect-square relative">
-                                                        <GoBoard
-                                                            boardState={fig.board}
-                                                            boardSize={boardSize}
-                                                            showCoordinates={printSettings.showCoordinate}
-                                                            showNumbers={printSettings.showMoveNumber}
-                                                            markers={[]}
-                                                            onCellClick={() => { }}
-                                                            onCellRightClick={() => { }}
-                                                            onBoardWheel={() => { }}
-                                                            onCellMouseEnter={() => { }}
-                                                            onCellMouseLeave={() => { }}
-                                                            onDragStart={() => { }}
-                                                            onDragMove={() => { }}
-                                                            selectionStart={null}
-                                                            isMonochrome={printSettings?.colorMode === 'MONOCHROME'}
-                                                        />
-                                                    </div>
-
-                                                </div>
-                                            ))}
-                                        </div>
-
-                                        {/* Footer */}
-                                        <div className="w-full text-center text-[10px] mt-auto pb-4">
-                                            {formatPrintString(printSettings.footer, pageIdx + 1)}
-                                        </div>
+                {
+                    (!printSettings || printSettings.pagingType === 'CURRENT') && (
+                        <div className="flex flex-col items-center w-full min-h-screen pt-12 print:pt-0">
+                            {/* Header Area */}
+                            <div className="w-full mb-4 text-center">
+                                {(printSettings?.showTitle !== false) && (
+                                    <h1 className="text-2xl font-bold mb-1">{formatPrintString(printSettings?.title || '%GN%')}</h1>
+                                )}
+                                {(printSettings?.showSubTitle !== false) && (
+                                    <h2 className="text-lg text-gray-600">{formatPrintString(printSettings?.subTitle || '%DT%')}</h2>
+                                )}
+                                {(printSettings?.showHeader !== false) && (
+                                    <div className="text-right text-xs text-gray-500 mt-2 border-b border-gray-400">
+                                        {formatPrintString(printSettings?.header || '')}
                                     </div>
-                                );
-                            });
-                        })()}
-                    </div>
-                )}
-            </div>
+                                )}
+                            </div>
+
+                            {/* Board */}
+                            <div className="w-[80vw] h-[80vw] max-w-[800px] max-h-[800px] flex justify-center border-0 border-transparent mb-4">
+                                <GoBoard
+                                    boardState={board}
+                                    boardSize={boardSize}
+                                    showCoordinates={printSettings?.showCoordinate ?? showCoordinates}
+                                    showNumbers={printSettings?.showMoveNumber ?? showNumbers}
+                                    markers={history[currentMoveIndex]?.markers || []}
+                                    onCellClick={() => { }}
+                                    onCellRightClick={() => { }}
+                                    onBoardWheel={() => { }}
+                                    onCellMouseEnter={() => { }}
+                                    onCellMouseLeave={() => { }}
+                                    onDragStart={() => { }}
+                                    onDragMove={() => { }}
+                                    selectionStart={null}
+                                    isMonochrome={printSettings?.colorMode === 'MONOCHROME'}
+                                    readOnly={true}
+                                />
+                            </div>
+
+                            {/* Footer */}
+                            <div className="w-full text-center text-xs mt-auto pb-4">
+                                {(printSettings?.showFooter !== false) && formatPrintString(printSettings?.footer || '')}
+                            </div>
+                        </div>
+                    )
+                }
+
+                {/* Mode B: Whole File */}
+                {/* Mode B: Whole File */}
+                {
+                    (printSettings?.pagingType === 'WHOLE_FILE_FIGURE' || printSettings?.pagingType === 'WHOLE_FILE_MOVE') && (
+                        <div className="flex flex-col items-center w-full pt-12 print:pt-0">
+                            {(() => {
+                                // Calculate Full History from Current Node to End of Variation
+                                let leaf = history[history.length - 1];
+                                while (leaf.children && leaf.children.length > 0) {
+                                    leaf = leaf.children[0];
+                                }
+                                const printHistory = [];
+                                let curr: import('./utils/treeUtilsV2').GameNode | null = leaf;
+                                while (curr) { printHistory.unshift(curr); curr = curr.parent; }
+
+                                const figures = generatePrintFigures(printHistory, printSettings.movesPerFigure);
+                                const perPage = printSettings.figuresPerPage || 4;
+                                const chunks = [];
+                                for (let i = 0; i < figures.length; i += perPage) {
+                                    chunks.push(figures.slice(i, i + perPage));
+                                }
+
+                                // Grid Class Logic
+                                // Grid Class Logic
+                                const getGridClass = (count: number) => {
+                                    const layout = printSettings.layout || 'AUTO';
+
+                                    // Forced Layouts
+                                    if (layout === '1COL') return "flex flex-col gap-4 h-full items-center justify-center";
+                                    if (layout === '2COL') return "grid grid-cols-2 gap-x-4 gap-y-2 h-full items-center justify-items-center align-content-center";
+
+                                    // Auto Logic
+                                    if (count === 1) return "flex justify-center items-center h-full"; // Centered single
+                                    if (count === 2) {
+                                        // Modified: Default to Side-by-Side (2 cols) for 2 items? 
+                                        // Old logic was Vertical. But Vertical prevents Landscape usage.
+                                        // Use grid-cols-2 for 2 items if we want side-by-side. 
+                                        // But if they are tall boards, they get small.
+                                        // Let's keep Vertical as default for Auto (Backward Compat + Portrait safety),
+                                        // User can switch to 2COL for Landscape.
+                                        return "grid grid-rows-2 gap-4 h-full items-center justify-items-center"; // 2 Vertical
+                                    }
+                                    // For 4, 6 etc:
+                                    return "grid grid-cols-2 gap-x-4 gap-y-2 h-full items-center justify-items-center align-content-center";
+                                };
+
+                                // Item Max Width Logic (to fit page)
+                                // A4 is roughly 210mm x 297mm.
+                                // 2 cols means max width ~45%.
+                                const getItemStyle = (count: number) => {
+                                    const layout = printSettings.layout || 'AUTO';
+                                    const isTwoCol = layout === '2COL' || (layout === 'AUTO' && count >= 3); // Auto 2 uses vertical (1 col effective width)
+
+                                    if (isTwoCol) {
+                                        // Dynamic resizing for high density (3 Rows: 5 or 6 items)
+                                        if (count >= 5) {
+                                            // 3 rows need to fit.
+                                            // Safe limit: 260px.
+                                            return { width: '90%', maxWidth: '260px' };
+                                        }
+                                        // 2 Rows (3 or 4 items)
+                                        // 480px was too large for some margins (960px height).
+                                        // Reduced to 400px (800px height) to be safe.
+                                        return { width: '95%', maxWidth: '400px' };
+                                    }
+
+                                    // Single Column (1 item or Vertical Stack)
+                                    if (count === 2 && layout === 'AUTO') {
+                                        // Vertical Stack: Limits are vertical mostly
+                                        return { width: '60%', maxWidth: '550px' };
+                                    }
+
+                                    // Default Single
+                                    return { width: '90%', maxWidth: '800px' };
+                                };
+
+                                return chunks.map((chunk, pageIdx) => {
+                                    const showHeader = printSettings.headerFrequency === 'EVERY_PAGE' || pageIdx === 0;
+
+                                    return (
+                                        <div key={pageIdx} className="page-break w-full min-h-screen p-4 box-border flex flex-col justify-center">
+                                            {/* Page Header */}
+                                            {showHeader && (
+                                                <div className="w-full mb-4 text-center">
+                                                    <h1 className="text-xl font-bold mb-1">{formatPrintString(printSettings.title, pageIdx + 1)}</h1>
+                                                    {printSettings.subTitle && <h2 className="text-sm text-gray-600">{formatPrintString(printSettings.subTitle, pageIdx + 1)}</h2>}
+                                                    <div className="text-right text-xs text-gray-500 mt-2 border-b border-gray-400">
+                                                        {formatPrintString(printSettings.header, pageIdx + 1)}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <div className={`${getGridClass(perPage)} w-full flex-grow`}>
+                                                {chunk.map((fig, i) => (
+                                                    <div key={i} className="flex flex-col items-center w-full" style={getItemStyle(perPage)}>
+
+                                                        {/* Figure Info */}
+                                                        <div className="w-full text-center font-bold text-xs mb-1">
+                                                            第{(pageIdx * perPage) + i + 1}図 ({fig.moveRangeStart}-{fig.moveRangeEnd})
+                                                        </div>
+
+                                                        {/* Board */}
+                                                        <div className="w-full aspect-square relative">
+                                                            <GoBoard
+                                                                boardState={fig.board}
+                                                                boardSize={boardSize}
+                                                                showCoordinates={printSettings.showCoordinate}
+                                                                showNumbers={printSettings.showMoveNumber}
+                                                                markers={[]}
+                                                                onCellClick={() => { }}
+                                                                onCellRightClick={() => { }}
+                                                                onBoardWheel={() => { }}
+                                                                onCellMouseEnter={() => { }}
+                                                                onCellMouseLeave={() => { }}
+                                                                onDragStart={() => { }}
+                                                                onDragMove={() => { }}
+                                                                selectionStart={null}
+                                                                isMonochrome={printSettings?.colorMode === 'MONOCHROME'}
+                                                            />
+                                                        </div>
+
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {/* Footer */}
+                                            <div className="w-full text-center text-[10px] mt-auto pb-4">
+                                                {formatPrintString(printSettings.footer, pageIdx + 1)}
+                                            </div>
+                                        </div>
+                                    );
+                                });
+                            })()}
+                        </div>
+                    )
+                }
+            </div >
         </>
 
     );
