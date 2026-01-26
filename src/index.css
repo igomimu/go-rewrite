@@ -23,15 +23,21 @@ body {
 
     /* Ensure the print content is visible and takes full width */
     #print-root {
-        display: block !important;
-        width: 100% !important;
-        margin: 0 !important;
-        padding: 0 !important;
+        display: none;
     }
 
-    /* Hide standard UI elements that might leak into print */
-    .print\:hidden {
-        display: none !important;
+    @media print {
+        #print-root {
+            display: block !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        /* Hide the main editor UI from the print output */
+        .print\:hidden {
+            display: none !important;
+        }
     }
 
     /* Maximize SVG size for print, but respect aspect ratio */

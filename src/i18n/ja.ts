@@ -66,6 +66,8 @@ export const ja = {
     'ui.branch': '分岐',
     'ui.exportingGif': 'GIF生成中...',
 
+    // 譜分け関連
+
     // Help Modal
     'help.title': 'ショートカット & ヘルプ',
     'help.clickRightClick': 'クリック / 右クリック',

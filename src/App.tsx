@@ -1854,14 +1854,11 @@ function App() {
             setIsPrintJob(true); // Toggle print mode within current window
         });
 
-        // Use a short delay to ensure React has finished rendering the print area
+        // Use a short delay to ensure React has finished rendering the print area.
+        // We stay in the editor view on screen.
         setTimeout(() => {
             window.print();
-            // Optional: After print dialog closes, we might want to return to normal mode?
-            // However, window.print() is blocking in most browsers.
-            // Some users might want to keep the "Preview" look.
-            // But usually, returning to normal app state is better.
-            setIsPrintJob(false);
+            setIsPrintJob(false); // Clean up hidden content after print dialog is handled
         }, 500);
     };
 
@@ -2216,7 +2213,7 @@ function App() {
     return (
         <>
             <div
-                className={`p-4 bg-gray-100 min-h-screen flex flex-col items-center font-sans text-sm pb-20 select-none relative ${isDragging ? 'bg-blue-50 outline outline-4 outline-blue-400 outline-offset-[-4px]' : ''} ${isPrintJob ? '!hidden' : ''}`}
+                className={`p-4 bg-gray-100 min-h-screen flex flex-col items-center font-sans text-sm pb-20 select-none relative ${isDragging ? 'bg-blue-50 outline outline-4 outline-blue-400 outline-offset-[-4px]' : ''} print:hidden`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
@@ -2808,20 +2805,8 @@ function App() {
                 </div>
             </div >
 
-            {/* Actual Print Content (Moved Outside Main Div) */}
+            {/* Actual Print Content (Visible only during print) */}
             <div id="print-root" className={isPrintJob ? "block w-full font-serif text-sm bg-white" : "hidden print:block w-full font-serif text-sm bg-white"}>
-                {isPrintJob && (
-                    <div className="fixed top-0 left-0 w-full bg-blue-100 p-2 text-center print:hidden z-50 flex justify-center gap-4 items-center shadow-md">
-                        <span className="font-bold text-blue-900">Print Preview</span>
-                        <button onClick={() => window.print()} className="px-4 py-1.5 bg-blue-600 text-white rounded font-bold hover:bg-blue-700 shadow transition-colors text-sm flex items-center gap-2">
-                            <span>🖨️</span> Print Now
-                        </button>
-                        <button onClick={() => { setIsPrintJob(false); setShowPrintModal(true); }} className="px-4 py-1.5 bg-gray-500 text-white rounded font-bold hover:bg-gray-600 shadow transition-colors text-sm">
-                            Close
-                        </button>
-                    </div>
-                )
-                }
 
                 {/* Mode A: Current Board */}
                 {
