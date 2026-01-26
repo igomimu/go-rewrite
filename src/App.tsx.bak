@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom'
 import GoBoard, { ViewRange, BoardState, StoneColor, Marker, Stone } from './components/GoBoard'
 import GameInfoModal from './components/GameInfoModal'
 import PrintSettingsModal, { PrintSettings } from './components/PrintSettingsModal'
-import { exportToPng, exportToSvg, svgToPngBlob, saveFile, prepareSvgForExport, promptSaveFile, writeToHandle } from './utils/exportUtils'
+import { exportToPng, exportToSvg, svgToPngBlob, saveFile, prepareSvgForExport } from './utils/exportUtils'
 import { createGifFromImages } from './utils/gifExportUtils'
 import { checkCaptures } from './utils/gameLogic'
 import { parseSGFTree, generateSGFTree, SgfTreeNode } from './utils/sgfUtils'
@@ -166,7 +166,6 @@ function App() {
     const gifTargetNodesRef = useRef<GameNode[]>([]);
     const gifFramesRef = useRef<string[]>([]);
     const originalNodeIdRef = useRef<string>('');
-    const gifFileHandleRef = useRef<any>(null);
     const [gifExportIndex, setGifExportIndex] = useState<number>(-1);
 
     // Replaced commitState with Tree Logic
@@ -917,7 +916,54 @@ function App() {
 
 
 
-    // Print Job Initialization removed (Moved to handlePrintRequest direct flow)
+    // Print Job Initialization
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('print_job') === 'true') {
+            setIsPrintJob(true);
+            const sgf = localStorage.getItem('gorw_temp_print_sgf');
+            const settingsStr = localStorage.getItem('gorw_temp_print_settings');
+
+            if (sgf && settingsStr) {
+                if (sgf.length > 20) {
+                    try {
+                        loadSGF(sgf);
+                        const savedIndex = localStorage.getItem('gorw_temp_print_index');
+                        if (savedIndex !== null) {
+                            const idx = parseInt(savedIndex, 10);
+                            let node = rootNode;
+                            for (let i = 0; i < idx; i++) {
+                                if (node.children.length > 0) node = node.children[0];
+                            }
+                            setCurrentNodeId(node.id);
+                        }
+                    } catch (e) {
+                        alert("Failed to load SGF data: " + e);
+                    }
+                }
+                setPrintSettings(JSON.parse(settingsStr));
+
+                // Set title
+                document.title = "Print Preview - GORewrite";
+
+                const triggerPrint = () => {
+                    try {
+                        window.focus();
+                        window.print();
+                    } catch (e) {
+                        console.warn("Auto-print failed", e);
+                    }
+                };
+
+                // Auto-print with delay to ensure rendering
+                if (document.readyState === 'complete') {
+                    setTimeout(triggerPrint, 800);
+                } else {
+                    window.addEventListener('load', () => setTimeout(triggerPrint, 800), { once: true });
+                }
+            }
+        }
+    }, []);
 
     const loadSGF = (content: string) => {
         const { board: initialBoard, size, metadata, root: sgfRoot } = parseSGFTree(content);
@@ -1651,137 +1697,80 @@ function App() {
 
     const handleExportGif = useCallback(async () => {
         if (!svgRef.current) return;
-
-        // --- Pre-Save Dialog (Must happen during user activation) ---
-        let handle = null;
-        try {
-            // Force empty filename preference
-            handle = await promptSaveFile('image/gif', '');
-            if (!handle && !('showSaveFilePicker' in window)) {
-                // Not supported, proceed to old flow
-            } else if (!handle) {
-                return; // User Cancelled
-            }
-        } catch (e) {
-            return; // User Cancelled
-        }
-
-        gifFileHandleRef.current = handle;
-
-        // Stop any active auto-play
-        setIsPlaying(false);
+        setIsPlaying(false); // Stop auto-play to prevent race conditions
         setIsExportingGif(true);
         setGifProgress(0);
 
-        // Initialize Export State
-        originalNodeIdRef.current = currentNodeId;
+        const originalNodeId = currentNodeId;
+        const frames: string[] = [];
 
-        // Calculate sequence: History + Future (Main Branch)
-        const sequence: GameNode[] = [...history];
-        let node = currentState;
-        while (node.children.length > 0) {
-            node = node.children[0];
-            sequence.push(node);
-        }
-        gifTargetNodesRef.current = sequence;
-        gifFramesRef.current = [];
+        // Snapshot the history path so it doesn't shrink when we change currentNodeId
+        const targetNodes = [...history];
 
-        // Start State Machine (triggers useEffect via state change)
-        setGifExportIndex(0);
+        // Allow UI to update (show Loading badge) before starting
+        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-    }, [currentNodeId, history, svgRef]);
+        try {
+            // Step-by-step frame capture
+            for (let i = 0; i < targetNodes.length; i++) {
+                // Update progress text
+                setGifProgress(Math.round((i / targetNodes.length) * 50)); // First 50% is capturing
 
-    // State-Driven GIF Export Effect
-    useEffect(() => {
-        if (!isExportingGif || gifExportIndex === -1) return;
+                // Force sync update to "playback" the move
+                flushSync(() => {
+                    setCurrentNodeId(targetNodes[i].id);
+                });
 
-        const targetNodes = gifTargetNodesRef.current;
-        const total = targetNodes.length;
+                // Wait for DOM update and repaint to ensure SVG content is fresh
+                // Double RAF ensures paint has occurred
+                await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-        // --- Completion Check ---
-        if (gifExportIndex >= total) {
-            // Finished Capturing. Proceed to Compilation.
-            const compile = async () => {
-                try {
-                    const frames = gifFramesRef.current;
-                    const gifDataUrl = await createGifFromImages(frames, {
-                        width: 600,
-                        height: 600,
-                        interval: playbackSpeed / 1000,
-                        progressCallback: (p) => setGifProgress(50 + Math.round(p * 50)),
-                    });
+                // Use playbackSpeed for recording delay (min 200ms to allow render)
+                // We subtract the RAF overhead implicitly or just wait extra.
+                await new Promise(resolve => setTimeout(resolve, Math.max(200, playbackSpeed)));
 
-                    // Conversion and Save
-                    const gifBlob = await (await fetch(gifDataUrl)).blob();
+                const svg = svgRef.current; // Refreshed DOM
 
+                // Use prepareSvgForExport to ensure "Dark Mode hardening" and consistency with single-image exports
+                const preparedSvg = prepareSvgForExport(svg, { backgroundColor: '#DCB35C' });
 
+                const width = parseFloat(preparedSvg.getAttribute('width') || '0');
+                const height = parseFloat(preparedSvg.getAttribute('height') || '0');
 
-                    if (gifFileHandleRef.current) {
-                        // Use the pre-selected handle
-                        await writeToHandle(gifFileHandleRef.current, gifBlob);
-                        alert("保存しました。");
-                    } else {
-                        // Fallback (Old Flow: chrome.downloads)
-                        // If we fall back here, we USE the filename logic in exportUtils (game.gif if empty)
-                        // This handles non-supported browsers or failed pickers safely.
-                        await saveFile(gifBlob, '', 'GIF Animation', 'image/gif');
-                    }
-                } catch (err) {
-                    console.error("GIF Compilation Error:", err);
-                    alert("GIFの作成に失敗しました。");
-                } finally {
-                    // Restore Original State
-                    setCurrentNodeId(originalNodeIdRef.current);
-                    setIsExportingGif(false);
-                    setGifProgress(0);
-                    setGifExportIndex(-1);
-                }
-            };
-            compile();
-            return;
-        }
-
-        // --- Capture Step ---
-        const step = async () => {
-            // Update Progress
-            setGifProgress(Math.round((gifExportIndex / total) * 50));
-
-            // Set Board State
-            setCurrentNodeId(targetNodes[gifExportIndex].id);
-
-            // Wait for Render + Playback Delay
-            await new Promise(r => setTimeout(r, Math.max(200, playbackSpeed)));
-
-            // Capture
-            if (svgRef.current) {
-                try {
-                    const svg = svgRef.current;
-                    const preparedSvg = prepareSvgForExport(svg, { backgroundColor: '#DCB35C' });
-                    const width = parseFloat(preparedSvg.getAttribute('width') || '0');
-                    const height = parseFloat(preparedSvg.getAttribute('height') || '0');
-                    const blob = await svgToPngBlob(preparedSvg, width, height, 1.5, '#DCB35C');
-                    const dataUrl = await new Promise<string>((resolve) => {
-                        const reader = new FileReader();
-                        reader.onloadend = () => resolve(reader.result as string);
-                        reader.readAsDataURL(blob);
-                    });
-                    gifFramesRef.current.push(dataUrl);
-                } catch (e) {
-                    console.error("Frame Capture Error", e);
-                }
+                const blob = await svgToPngBlob(preparedSvg, width, height, 1.5, '#DCB35C');
+                const dataUrl = await new Promise<string>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.readAsDataURL(blob);
+                });
+                frames.push(dataUrl);
             }
 
-            // Allow interrupt
-            if (!isExportingGif) return;
+            // Restore state
+            flushSync(() => {
+                setCurrentNodeId(originalNodeId);
+            });
 
-            // Next Frame
-            setGifExportIndex(prev => prev + 1);
-        };
+            // Compilation
+            const gifDataUrl = await createGifFromImages(frames, {
+                width: 600,
+                height: 600,
+                interval: playbackSpeed / 1000,
+                progressCallback: (p) => setGifProgress(50 + Math.round(p * 50)), // Map 0-1 to 50-100%
+            });
 
-        const timer = setTimeout(step, 0);
-        return () => clearTimeout(timer);
+            // Conversion and Save
+            const gifBlob = await (await fetch(gifDataUrl)).blob();
+            await saveFile(gifBlob, '', 'GIF Animation', 'image/gif');
 
-    }, [gifExportIndex, isExportingGif, playbackSpeed]);
+        } catch (err) {
+            console.error("GIF Export Error:", err);
+            alert("GIFの作成に失敗しました。");
+        } finally {
+            setIsExportingGif(false);
+            setGifProgress(0);
+        }
+    }, [history, currentNodeId, svgRef, playbackSpeed]);
 
 
 
@@ -1845,24 +1834,42 @@ function App() {
     };
 
     const handlePrintRequest = (settings: PrintSettings) => {
-        // We no longer open a new tab.
-        // Instead, we set the settings locally and trigger print.
+        // Calculate Full History SGF if needed
+        let sgf;
+        if (settings.pagingType === 'WHOLE_FILE_FIGURE' || settings.pagingType === 'WHOLE_FILE_MOVE') {
+            // Traverse from Root to Leaf (Main Line from current split?)
+            // Usually Whole File means "The entire loaded game".
+            // Since we can't easily guess which branch, we use the current branch extended to leaf.
+            // But we need to start from ROOT.
+            let leaf = history[history.length - 1];
+            while (leaf.children && leaf.children.length > 0) {
+                leaf = leaf.children[0];
+            }
 
-        flushSync(() => {
-            setPrintSettings(settings);
-            setShowPrintModal(false);
-            setIsPrintJob(true); // Toggle print mode within current window
-        });
+            // Reconstruct path from ROOT to Leaf
+            // history[0] is root.
+            sgf = getSGFString();
+        } else {
+            sgf = getSGFString();
+        }
 
-        // Use a short delay to ensure React has finished rendering the print area
-        setTimeout(() => {
+        // Side Panel Workaround: Open in new tab to print
+        localStorage.setItem('gorw_temp_print_sgf', sgf);
+        localStorage.setItem('gorw_temp_print_settings', JSON.stringify(settings));
+        localStorage.setItem('gorw_temp_print_index', currentMoveIndex.toString());
+
+        // Open new tab (relative path to index.html)
+        const printWindow = window.open('index.html?print_job=true', '_blank');
+        if (!printWindow) {
+            flushSync(() => {
+                setPrintSettings(settings);
+                setShowPrintModal(false);
+            });
             window.print();
-            // Optional: After print dialog closes, we might want to return to normal mode?
-            // However, window.print() is blocking in most browsers.
-            // Some users might want to keep the "Preview" look.
-            // But usually, returning to normal app state is better.
-            setIsPrintJob(false);
-        }, 500);
+            return;
+        }
+
+        setShowPrintModal(false);
     };
 
 
@@ -2809,7 +2816,8 @@ function App() {
             </div >
 
             {/* Actual Print Content (Moved Outside Main Div) */}
-            <div id="print-root" className={isPrintJob ? "block w-full font-serif text-sm bg-white" : "hidden print:block w-full font-serif text-sm bg-white"}>
+            {/* Actual Print Content (Moved Outside Main Div) */}
+            <div className={isPrintJob ? "block w-full font-serif text-sm bg-white" : "hidden print:block w-full font-serif text-sm bg-white"}>
                 {isPrintJob && (
                     <div className="fixed top-0 left-0 w-full bg-blue-100 p-2 text-center print:hidden z-50 flex justify-center gap-4 items-center shadow-md">
                         <span className="font-bold text-blue-900">Print Preview</span>
