@@ -1845,29 +1845,26 @@ function App() {
     };
 
     const handlePrintRequest = (settings: PrintSettings) => {
-        // 譜分け（Fu-wake）印刷 または 通常印刷の実行
-        // サイドバー内で完結させるため、隠しコンテナに描画してから印刷ダイアログを呼び出す
+        // 譜分け（Fu-wake）印刷 または 通常印刷の開始
 
         flushSync(() => {
             setPrintSettings(settings);
             setShowPrintModal(false);
-            setIsPrintJob(true); // 印刷用コンテンツのレンダリングを開始
+            setIsPrintJob(true); // 印刷用コンテンツの生成
         });
 
-        // レンダリングが完了するのを待ってから印刷ダイアログを呼び出す
-        // window.print() はユーザー操作と直接結びついている必要があるためタイマーは短めか同期が望ましいが
-        // 複雑な棋譜の再描画時間を考慮して 1000ms 程度確保する
+        // 描画とメディアクエリの適用を確実にするため、短めのタイマーで実行
+        // 100ms はユーザーのジェスチャ（クリック）として認識される限界に近い安全圏
         setTimeout(() => {
             try {
-                window.focus(); // サイドパネルにフォーカスを強制
+                window.focus();
                 window.print();
             } catch (e) {
-                console.error("Print failed", e);
+                console.error("Print dialog failed", e);
             }
-            // ユーザーがキャンセルまたは印刷した後にフラグを下ろす
-            // 注意: Chromeではダイアログが開いている間ここで止まる
+            // 印刷後はフラグを下ろす（隠しコンテナを空にする）
             setIsPrintJob(false);
-        }, 1000);
+        }, 100);
     };
 
 
@@ -2842,7 +2839,7 @@ function App() {
                                     boardSize={boardSize}
                                     showCoordinates={printSettings?.showCoordinate ?? showCoordinates}
                                     showNumbers={printSettings?.showMoveNumber ?? showNumbers}
-                                    markers={history[currentMoveIndex]?.markers || []}
+                                    markers={currentState.markers || []}
                                     onCellClick={() => { }}
                                     onCellRightClick={() => { }}
                                     onBoardWheel={() => { }}
