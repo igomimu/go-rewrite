@@ -1845,21 +1845,29 @@ function App() {
     };
 
     const handlePrintRequest = (settings: PrintSettings) => {
-        // We no longer open a new tab.
-        // Instead, we set the settings locally and trigger print.
+        // 譜分け（Fu-wake）印刷 または 通常印刷の実行
+        // サイドバー内で完結させるため、隠しコンテナに描画してから印刷ダイアログを呼び出す
 
         flushSync(() => {
             setPrintSettings(settings);
             setShowPrintModal(false);
-            setIsPrintJob(true); // Toggle print mode within current window
+            setIsPrintJob(true); // 印刷用コンテンツのレンダリングを開始
         });
 
-        // Use a short delay to ensure React has finished rendering the print area.
-        // We stay in the editor view on screen.
+        // レンダリングが完了するのを待ってから印刷ダイアログを呼び出す
+        // window.print() はユーザー操作と直接結びついている必要があるためタイマーは短めか同期が望ましいが
+        // 複雑な棋譜の再描画時間を考慮して 1000ms 程度確保する
         setTimeout(() => {
-            window.print();
-            setIsPrintJob(false); // Clean up hidden content after print dialog is handled
-        }, 500);
+            try {
+                window.focus(); // サイドパネルにフォーカスを強制
+                window.print();
+            } catch (e) {
+                console.error("Print failed", e);
+            }
+            // ユーザーがキャンセルまたは印刷した後にフラグを下ろす
+            // 注意: Chromeではダイアログが開いている間ここで止まる
+            setIsPrintJob(false);
+        }, 1000);
     };
 
 
