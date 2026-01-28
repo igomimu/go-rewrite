@@ -3,8 +3,8 @@ import { flushSync } from 'react-dom'
 import GoBoard, { ViewRange, BoardState, StoneColor, Marker, Stone } from './components/GoBoard'
 import GameInfoModal from './components/GameInfoModal'
 import PrintSettingsModal, { PrintSettings } from './components/PrintSettingsModal'
-import { exportToPng, exportToSvg, svgToPngBlob, saveFile, prepareSvgForExport, promptSaveFile, writeToHandle } from './utils/exportUtils'
-import { createGifFromImages } from './utils/gifExportUtils'
+import { exportToPng, exportToSvg, exportToEmf } from './utils/exportUtils'
+// import { createGifFromImages } from './utils/gifExportUtils' // Unused
 import { checkCaptures } from './utils/gameLogic'
 import { parseSGFTree, generateSGFTree, SgfTreeNode } from './utils/sgfUtils'
 import { generatePrintFigures } from './utils/printUtils'
@@ -99,13 +99,11 @@ function App() {
     const [isMonochrome, setIsMonochrome] = useState(() => {
         try { return localStorage.getItem('gorw_is_monochrome') === 'true'; } catch { return false; }
     });
-    const [exportMode, setExportMode] = useState<'SVG' | 'PNG'>(() => {
-        try { const saved = localStorage.getItem('gorw_export_mode'); return (saved === 'SVG' || saved === 'PNG') ? saved : 'SVG'; } catch { return 'SVG'; }
+    const [exportMode, setExportMode] = useState<'SVG' | 'PNG' | 'EMF'>(() => {
+        try { const saved = localStorage.getItem('gorw_export_mode'); return (saved === 'SVG' || saved === 'PNG' || saved === 'EMF') ? (saved as any) : 'SVG'; } catch { return 'SVG'; }
     });
 
     const [showCapturedInExport, setShowCapturedInExport] = useState(false);
-    const [isExportingGif, setIsExportingGif] = useState(false);
-    const [gifProgress, setGifProgress] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
     const [playbackSpeed, setPlaybackSpeed] = useState(800); // ms per move (Default 0.8s)
 
@@ -161,13 +159,9 @@ function App() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const dragStartRef = useRef<{ x: number, y: number } | null>(null);
     const hoveredCellRef = useRef<{ x: number, y: number } | null>(null);
+    const [showNextMove, setShowNextMove] = useState(false);
 
-    // GIF Export Refs
-    const gifTargetNodesRef = useRef<GameNode[]>([]);
-    const gifFramesRef = useRef<string[]>([]);
-    const originalNodeIdRef = useRef<string>('');
-    const gifFileHandleRef = useRef<any>(null);
-    const [gifExportIndex, setGifExportIndex] = useState<number>(-1);
+
 
     // Replaced commitState with Tree Logic
     const commitState = (newBoard: BoardState, newNextNumber: number, newActiveColor: StoneColor, newSize: number, newMarkers?: Marker[], move?: { x: number, y: number, color: StoneColor }) => {
@@ -1256,8 +1250,8 @@ function App() {
                 circle.setAttribute('cx', cx.toString());
                 circle.setAttribute('cy', cy.toString());
                 circle.setAttribute('r', '18.4');
-                circle.setAttribute('fill', stone.color === 'BLACK' ? 'black' : 'white');
-                circle.setAttribute('stroke', 'black');
+                circle.setAttribute('fill', stone.color === 'BLACK' ? '#000000' : '#FFFFFF');
+                circle.setAttribute('stroke', '#000000');
                 circle.setAttribute('stroke-width', stone.color === 'BLACK' ? '2' : '0.7');
 
                 const text = document.createElementNS(svgNS, 'text');
@@ -1265,7 +1259,7 @@ function App() {
                 text.setAttribute('y', cy.toString());
                 text.setAttribute('dy', '.35em');
                 text.setAttribute('text-anchor', 'middle');
-                text.setAttribute('fill', stone.color === 'BLACK' ? 'white' : 'black');
+                text.setAttribute('fill', stone.color === 'BLACK' ? '#FFFFFF' : '#000000');
                 const fontSize = (stone.text && stone.text.length >= 3) ? '18' : '26';
                 text.setAttribute('font-size', fontSize);
                 text.setAttribute('font-family', 'Arial, sans-serif');
@@ -1417,8 +1411,8 @@ function App() {
                     c.setAttribute('cx', drawX.toString());
                     c.setAttribute('cy', '0');
                     c.setAttribute('r', '18.4');
-                    c.setAttribute('fill', visStone.color === 'BLACK' ? 'black' : 'white');
-                    c.setAttribute('stroke', 'black');
+                    c.setAttribute('fill', visStone.color === 'BLACK' ? '#000000' : '#FFFFFF');
+                    c.setAttribute('stroke', '#000000');
                     c.setAttribute('stroke-width', visStone.color === 'BLACK' ? '2' : '0.7');
                     itemG.appendChild(c);
 
@@ -1427,7 +1421,7 @@ function App() {
                     t.setAttribute('y', '0');
                     t.setAttribute('dy', '.35em');
                     t.setAttribute('text-anchor', 'middle');
-                    t.setAttribute('fill', visStone.color === 'BLACK' ? 'white' : 'black');
+                    t.setAttribute('fill', visStone.color === 'BLACK' ? '#FFFFFF' : '#000000');
                     const fs = (visStone.text && visStone.text.length >= 3) ? '18' : '26';
                     t.setAttribute('font-size', fs);
                     t.setAttribute('font-family', 'Arial, sans-serif');
@@ -1444,7 +1438,7 @@ function App() {
                 openB.setAttribute('y', '0');
                 openB.setAttribute('dy', '.35em');
                 openB.setAttribute('text-anchor', 'middle');
-                openB.setAttribute('fill', 'black');
+                openB.setAttribute('fill', '#000000');
                 openB.setAttribute('font-size', '24');
                 openB.setAttribute('font-weight', 'bold');
                 openB.textContent = "[";
@@ -1480,8 +1474,8 @@ function App() {
                         c.setAttribute('cx', stoneCenterX.toString());
                         c.setAttribute('cy', '0');
                         c.setAttribute('r', '18.4');
-                        c.setAttribute('fill', (hidStone.color === 'BLACK') ? 'black' : 'white');
-                        c.setAttribute('stroke', 'black');
+                        c.setAttribute('fill', (hidStone.color === 'BLACK') ? '#000000' : '#FFFFFF');
+                        c.setAttribute('stroke', '#000000');
                         c.setAttribute('stroke-width', (hidStone.color === 'BLACK' ? '2' : '0.7'));
                         itemG.appendChild(c);
 
@@ -1490,7 +1484,7 @@ function App() {
                         t.setAttribute('y', '0');
                         t.setAttribute('dy', '.35em');
                         t.setAttribute('text-anchor', 'middle');
-                        t.setAttribute('fill', (hidStone.color === 'BLACK') ? 'white' : 'black');
+                        t.setAttribute('fill', (hidStone.color === 'BLACK') ? '#FFFFFF' : '#000000');
                         const fs = (hidStone.text && hidStone.text.length >= 3) ? '18' : '26';
                         t.setAttribute('font-size', fs);
                         t.setAttribute('font-family', 'Arial, sans-serif');
@@ -1507,7 +1501,7 @@ function App() {
                 closeB.setAttribute('y', '0');
                 closeB.setAttribute('dy', '.35em');
                 closeB.setAttribute('text-anchor', 'middle');
-                closeB.setAttribute('fill', 'black');
+                closeB.setAttribute('fill', '#000000');
                 closeB.setAttribute('font-size', '24');
                 closeB.setAttribute('font-weight', 'bold');
                 closeB.textContent = "]";
@@ -1547,8 +1541,8 @@ function App() {
                 c.setAttribute('cx', cx.toString());
                 c.setAttribute('cy', cy.toString());
                 c.setAttribute('r', '18.4');
-                c.setAttribute('fill', stone.color === 'BLACK' ? 'black' : 'white');
-                c.setAttribute('stroke', 'black');
+                c.setAttribute('fill', stone.color === 'BLACK' ? '#000000' : '#FFFFFF');
+                c.setAttribute('stroke', '#000000');
                 c.setAttribute('stroke-width', stone.color === 'BLACK' ? '2' : '0.7');
                 stoneGroup.appendChild(c);
 
@@ -1557,7 +1551,7 @@ function App() {
                 t.setAttribute('y', cy.toString());
                 t.setAttribute('dy', '.35em');
                 t.setAttribute('text-anchor', 'middle');
-                t.setAttribute('fill', stone.color === 'BLACK' ? 'white' : 'black');
+                t.setAttribute('fill', stone.color === 'BLACK' ? '#FFFFFF' : '#000000');
                 const fontSize = (stone.text && stone.text.length >= 3) ? '18' : '26';
                 t.setAttribute('font-size', fontSize);
                 t.setAttribute('font-family', 'Arial, sans-serif');
@@ -1586,8 +1580,10 @@ function App() {
         clone.setAttribute('width', `${finalW}`);
         clone.setAttribute('height', `${finalH}`);
 
-        if (isSvg) {
+        if (modeToUse === 'SVG') {
             await exportToSvg(clone, { backgroundColor: bgColor, destination: destination, filename: filename });
+        } else if (modeToUse === 'EMF') {
+            await exportToEmf(clone, { backgroundColor: bgColor, destination: destination, filename: filename });
         } else {
             await exportToPng(clone, { scale: 3, backgroundColor: bgColor, destination: destination, filename });
         }
@@ -1596,6 +1592,7 @@ function App() {
 
     const handleExport = useCallback(async (forcedMode?: 'SVG' | 'PNG', destination?: 'CLIPBOARD' | 'DOWNLOAD') => {
         const modeToUse = forcedMode || exportMode;
+        // isSvg used for internal logic, but we'll use modeToUse for actual export call
         const isSvg = modeToUse === 'SVG';
 
         const filename = ''; // Empty filename as requested
@@ -1649,139 +1646,10 @@ function App() {
         setMoveSource(null);
     }, [selectionStart, selectionEnd, getBounds, getRestoredStones, showCapturedInExport, performExport]);
 
-    const handleExportGif = useCallback(async () => {
-        if (!svgRef.current) return;
 
-        // --- Pre-Save Dialog (Must happen during user activation) ---
-        let handle = null;
-        try {
-            // Force empty filename preference
-            handle = await promptSaveFile('image/gif', '');
-            if (!handle && !('showSaveFilePicker' in window)) {
-                // Not supported, proceed to old flow
-            } else if (!handle) {
-                return; // User Cancelled
-            }
-        } catch (e) {
-            return; // User Cancelled
-        }
-
-        gifFileHandleRef.current = handle;
-
-        // Stop any active auto-play
-        setIsPlaying(false);
-        setIsExportingGif(true);
-        setGifProgress(0);
-
-        // Initialize Export State
-        originalNodeIdRef.current = currentNodeId;
-
-        // Calculate sequence: History + Future (Main Branch)
-        const sequence: GameNode[] = [...history];
-        let node = currentState;
-        while (node.children.length > 0) {
-            node = node.children[0];
-            sequence.push(node);
-        }
-        gifTargetNodesRef.current = sequence;
-        gifFramesRef.current = [];
-
-        // Start State Machine (triggers useEffect via state change)
-        setGifExportIndex(0);
-
-    }, [currentNodeId, history, svgRef]);
 
     // State-Driven GIF Export Effect
-    useEffect(() => {
-        if (!isExportingGif || gifExportIndex === -1) return;
 
-        const targetNodes = gifTargetNodesRef.current;
-        const total = targetNodes.length;
-
-        // --- Completion Check ---
-        if (gifExportIndex >= total) {
-            // Finished Capturing. Proceed to Compilation.
-            const compile = async () => {
-                try {
-                    const frames = gifFramesRef.current;
-                    const gifDataUrl = await createGifFromImages(frames, {
-                        width: 600,
-                        height: 600,
-                        interval: playbackSpeed / 1000,
-                        progressCallback: (p) => setGifProgress(50 + Math.round(p * 50)),
-                    });
-
-                    // Conversion and Save
-                    const gifBlob = await (await fetch(gifDataUrl)).blob();
-
-
-
-                    if (gifFileHandleRef.current) {
-                        // Use the pre-selected handle
-                        await writeToHandle(gifFileHandleRef.current, gifBlob);
-                        alert("保存しました。");
-                    } else {
-                        // Fallback (Old Flow: chrome.downloads)
-                        // If we fall back here, we USE the filename logic in exportUtils (game.gif if empty)
-                        // This handles non-supported browsers or failed pickers safely.
-                        await saveFile(gifBlob, '', 'GIF Animation', 'image/gif');
-                    }
-                } catch (err) {
-                    console.error("GIF Compilation Error:", err);
-                    alert("GIFの作成に失敗しました。");
-                } finally {
-                    // Restore Original State
-                    setCurrentNodeId(originalNodeIdRef.current);
-                    setIsExportingGif(false);
-                    setGifProgress(0);
-                    setGifExportIndex(-1);
-                }
-            };
-            compile();
-            return;
-        }
-
-        // --- Capture Step ---
-        const step = async () => {
-            // Update Progress
-            setGifProgress(Math.round((gifExportIndex / total) * 50));
-
-            // Set Board State
-            setCurrentNodeId(targetNodes[gifExportIndex].id);
-
-            // Wait for Render + Playback Delay
-            await new Promise(r => setTimeout(r, Math.max(200, playbackSpeed)));
-
-            // Capture
-            if (svgRef.current) {
-                try {
-                    const svg = svgRef.current;
-                    const preparedSvg = prepareSvgForExport(svg, { backgroundColor: '#DCB35C' });
-                    const width = parseFloat(preparedSvg.getAttribute('width') || '0');
-                    const height = parseFloat(preparedSvg.getAttribute('height') || '0');
-                    const blob = await svgToPngBlob(preparedSvg, width, height, 1.5, '#DCB35C');
-                    const dataUrl = await new Promise<string>((resolve) => {
-                        const reader = new FileReader();
-                        reader.onloadend = () => resolve(reader.result as string);
-                        reader.readAsDataURL(blob);
-                    });
-                    gifFramesRef.current.push(dataUrl);
-                } catch (e) {
-                    console.error("Frame Capture Error", e);
-                }
-            }
-
-            // Allow interrupt
-            if (!isExportingGif) return;
-
-            // Next Frame
-            setGifExportIndex(prev => prev + 1);
-        };
-
-        const timer = setTimeout(step, 0);
-        return () => clearTimeout(timer);
-
-    }, [gifExportIndex, isExportingGif, playbackSpeed]);
 
 
 
@@ -2233,12 +2101,7 @@ function App() {
                 )}
 
                 {/* Recording Indicator (Non-blocking) */}
-                {isExportingGif && (
-                    <div className="absolute top-4 right-4 z-[100] bg-red-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 animate-pulse">
-                        <div className="w-3 h-3 bg-white rounded-full"></div>
-                        <span className="font-bold text-sm">{t('ui.exportingGif')} {gifProgress}%</span>
-                    </div>
-                )}
+
 
                 {/* Print Area Removed (Moved Outside) */}
                 <div className="flex justify-between w-full items-center mb-2">
@@ -2308,6 +2171,13 @@ function App() {
                                 👻
                             </button>
                             <button
+                                onClick={() => setShowNextMove(!showNextMove)}
+                                title={t('tooltip.showNextMove', { status: showNextMove ? t('ui.on') : t('ui.off') })}
+                                className={`w-6 h-6 rounded-md flex items-center justify-center font-bold transition-all text-sm shadow-sm ${showNextMove ? 'bg-green-100 text-green-700 ring-1 ring-green-300' : 'bg-white text-gray-400 hover:text-green-500'}`}
+                            >
+                                👁️
+                            </button>
+                            <button
                                 onClick={() => setShowNumbers(!showNumbers)}
                                 title={t('tooltip.showNumbers', { status: showNumbers ? t('ui.on') : t('ui.off') })}
                                 className={`w-6 h-6 rounded-md flex items-center justify-center font-bold transition-all text-sm shadow-sm ${showNumbers ? 'bg-cyan-100 text-cyan-700 ring-1 ring-cyan-300' : 'bg-white text-gray-400 hover:text-cyan-500'}`}
@@ -2334,17 +2204,9 @@ function App() {
                                 ⬇️
                             </button>
                             <button
-                                onClick={handleExportGif}
-                                disabled={isExportingGif}
-                                title={t('tooltip.exportGif')}
-                                className="w-6 h-6 rounded-md bg-white text-indigo-600 hover:bg-indigo-50 flex items-center justify-center font-bold transition-all text-sm shadow-sm disabled:opacity-50"
-                            >
-                                🎞️
-                            </button>
-                            <button
                                 title={t('tooltip.toggleFormat')}
                                 onClick={() => {
-                                    const next = exportMode === 'SVG' ? 'PNG' : 'SVG';
+                                    const next = exportMode === 'SVG' ? 'PNG' : (exportMode === 'PNG' ? 'EMF' : 'SVG');
                                     setExportMode(next);
                                     localStorage.setItem('gorw_export_mode', next);
                                 }}
@@ -2522,7 +2384,7 @@ function App() {
                         nextNumber={nextNumber}
                         activeColor={activeColor}
                         markers={history[currentMoveIndex]?.markers || []}
-                        nextMoves={branchCandidates}
+                        nextMoves={(branchCandidates.length > 1 || showNextMove) ? branchCandidates : []}
                         onNextMoveClick={handleBranchClick}
                     />
 
@@ -2811,7 +2673,7 @@ function App() {
             </div >
 
             {/* Actual Print Content (Visible only during print) */}
-            <div id="print-root" className={isPrintJob ? "block w-full font-serif text-sm bg-white" : "hidden print:block w-full font-serif text-sm bg-white"}>
+            < div id="print-root" className={isPrintJob ? "block w-full font-serif text-sm bg-white" : "hidden print:block w-full font-serif text-sm bg-white"} >
 
                 {/* Mode A: Current Board */}
                 {

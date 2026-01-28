@@ -319,8 +319,8 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                     <g key={`s-group-${x}-${y}`} className="pointer-events-none">
                         <circle
                             cx={cx} cy={cy} r={STONE_RADIUS}
-                            fill={isBlack ? "black" : "white"}
-                            stroke={isBlack ? "black" : "black"}
+                            fill={isBlack ? "#000000" : "#FFFFFF"}
+                            stroke={isBlack ? "#000000" : "#000000"}
                             strokeWidth={isBlack ? 2 : 2.0}
                             className={isBlack ? "black-stone" : "white-stone"}
                         // Removed crispEdges from stones for smoothness
@@ -330,7 +330,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                                 x={cx} y={cy}
                                 dy=".35em"
                                 textAnchor="middle"
-                                fill={isBlack ? "white" : "black"}
+                                fill={isBlack ? "#FFFFFF" : "#000000"}
                                 fontSize={(displayText && displayText.length >= 3) ? CELL_SIZE * 0.45 : FONT_SIZE}
                                 fontFamily="Arial, sans-serif"
                                 fontWeight="bold"
@@ -353,7 +353,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
             const cy = MARGIN + (m.y - 1) * CELL_SIZE;
             const stone = boardState[m.y - 1]?.[m.x - 1];
             const isBlackStone = stone?.color === 'BLACK';
-            const baseColor = isBlackStone ? 'white' : 'black';
+            const baseColor = isBlackStone ? '#FFFFFF' : '#000000';
 
             if (m.type === 'LABEL') {
                 markerElements.push(
@@ -470,7 +470,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                     cx={MARGIN + (sx - 1) * CELL_SIZE}
                     cy={MARGIN + (sy - 1) * CELL_SIZE}
                     r={STAR_POINT_RADIUS}
-                    fill="black"
+                    fill="#000000"
                 // Removed crispEdges from stars for smoothness
                 />
             ))}
@@ -498,13 +498,13 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                         <circle
                             cx={cx} cy={cy}
                             r={STONE_RADIUS * 0.6} // Created slightly smaller
-                            fill={isBlack ? "black" : "white"}
-                            stroke="black"
+                            fill={isBlack ? "#000000" : "#FFFFFF"}
+                            stroke="#000000"
                             strokeWidth={1}
                             opacity={0.5}
                         />
                         {/* Optional: Add a small marker to indicate it's a branch? */}
-                        <circle cx={cx} cy={cy} r={3} fill={isBlack ? "white" : "black"} opacity={0.8} />
+                        <circle cx={cx} cy={cy} r={3} fill={isBlack ? "#FFFFFF" : "#000000"} opacity={0.8} />
                     </g>
                 );
             })}
@@ -580,8 +580,8 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                                 const stoneX = 20 + idx * 35;
                                 return (
                                     <g key={`l-${idx}`}>
-                                        <circle cx={stoneX} cy={0} r={RADIUS} fill={stone.color === 'BLACK' ? 'black' : 'white'} stroke="black" strokeWidth={1} />
-                                        <text x={stoneX} y={0} dy=".35em" textAnchor="middle" fill={stone.color === 'BLACK' ? 'white' : 'black'} fontSize={(stone.text && stone.text.length >= 3) ? CELL_SIZE * 0.45 : FONT} fontFamily="Arial, sans-serif" fontWeight="bold" style={{ WebkitFontSmoothing: 'none', fontSmooth: 'never' } as any}>{stone.text}</text>
+                                        <circle cx={stoneX} cy={0} r={RADIUS} fill={stone.color === 'BLACK' ? '#000000' : '#FFFFFF'} stroke="#000000" strokeWidth={1} />
+                                        <text x={stoneX} y={0} dy=".35em" textAnchor="middle" fill={stone.color === 'BLACK' ? '#FFFFFF' : '#000000'} fontSize={(stone.text && stone.text.length >= 3) ? CELL_SIZE * 0.45 : FONT} fontFamily="Arial, sans-serif" fontWeight="bold" style={{ WebkitFontSmoothing: 'none', fontSmooth: 'never' } as any}>{stone.text}</text>
                                     </g>
                                 );
                             });
@@ -594,14 +594,14 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                                     {leftGroup}
 
                                     {/* Bracket Open */}
-                                    <text x={rightStartX} y={8} fontSize="20" fill="black" fontFamily="sans-serif">[</text>
+                                    <text x={rightStartX} y={8} fontSize="20" fill="#000000" fontFamily="sans-serif">[</text>
 
                                     {/* Right Stone (Label) */}
-                                    <circle cx={rightStartX + 30} cy={0} r={RADIUS} fill={rColor === 'BLACK' ? 'black' : 'white'} stroke="black" strokeWidth={1} />
-                                    <text x={rightStartX + 30} y={0} dy=".35em" textAnchor="middle" fill={rColor === 'BLACK' ? 'white' : 'black'} fontSize={(item.right.text && item.right.text.length >= 3) ? CELL_SIZE * 0.45 : FONT} fontFamily="Arial, sans-serif" fontWeight="bold" style={{ WebkitFontSmoothing: 'none', fontSmooth: 'never' } as any}>{item.right.text}</text>
+                                    <circle cx={rightStartX + 30} cy={0} r={RADIUS} fill={rColor === 'BLACK' ? '#000000' : '#FFFFFF'} stroke="#000000" strokeWidth={1} />
+                                    <text x={rightStartX + 30} y={0} dy=".35em" textAnchor="middle" fill={rColor === 'BLACK' ? '#FFFFFF' : '#000000'} fontSize={(item.right.text && item.right.text.length >= 3) ? CELL_SIZE * 0.45 : FONT} fontFamily="Arial, sans-serif" fontWeight="bold" style={{ WebkitFontSmoothing: 'none', fontSmooth: 'never' } as any}>{item.right.text}</text>
 
                                     {/* Bracket Close */}
-                                    <text x={rightStartX + 60} y={8} fontSize="20" fill="black" fontFamily="sans-serif">]</text>
+                                    <text x={rightStartX + 60} y={8} fontSize="20" fill="#000000" fontFamily="sans-serif">]</text>
                                 </g>
                             );
                         })}

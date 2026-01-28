@@ -22,12 +22,13 @@ export const ja = {
     'tooltip.showCaptured': 'エクスポート時に取られた石を表示: {status}',
     'tooltip.showNumbers': '手番号表示: {status}',
     'tooltip.pass': 'パス',
+    'tooltip.showNextMove': '次の一手候補を表示: {status}',
 
     // Tooltips - Export
     'tooltip.copyAs': '{format}としてコピー (クリックでコピー)',
     'tooltip.savePng': 'PNGとして保存...',
     'tooltip.exportGif': 'GIFアニメーションとして保存...',
-    'tooltip.toggleFormat': 'エクスポート形式を切り替え (SVG/PNG)',
+    'tooltip.toggleFormat': 'エクスポート形式を切り替え (SVG/PNG/EMF)',
 
     // Tooltips - System
     'tooltip.openNewTab': '新しいタブで開く (最大化)',

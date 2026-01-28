@@ -24,6 +24,7 @@ export const zh: Record<TranslationKey, string> = {
     'tooltip.showCaptured': '导出时显示被吃的子: {status}',
     'tooltip.showNumbers': '显示手数: {status}',
     'tooltip.pass': '虚手',
+    'tooltip.showNextMove': '显示下一手候选: {status}',
 
     // Tooltips - Export
     'tooltip.copyAs': '复制为{format} (点击复制)',

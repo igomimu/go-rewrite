@@ -24,6 +24,7 @@ export const en: Record<TranslationKey, string> = {
     'tooltip.showCaptured': 'Show Captured Stones in Export: {status}',
     'tooltip.showNumbers': 'Show Move Numbers: {status}',
     'tooltip.pass': 'Pass',
+    'tooltip.showNextMove': 'Show Next Move Candidates: {status}',
 
     // Tooltips - Export
     'tooltip.copyAs': 'Copy as {format} (Click to Copy)',
