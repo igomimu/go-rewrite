@@ -1690,6 +1690,10 @@ function App() {
                 // prepareSvgForExport already clones internally
                 const clone = prepareSvgForExport(svgRef.current!, { backgroundColor: isMonochrome ? '#FFFFFF' : '#DCB35C' });
 
+                // Final Sweep for markers in GIF frames
+                const markersInClone = clone.querySelectorAll('.board-marker');
+                markersInClone.forEach(m => clone.appendChild(m));
+
                 // Add restored stones to clone (same as performExport)
                 // ... (simplified for now, ideally reused performExport's logic)
 

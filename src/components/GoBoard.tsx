@@ -335,6 +335,7 @@ const GoBoard = forwardRef<SVGSVGElement, GoBoardProps>(({
                                 fontFamily="Arial, sans-serif"
                                 fontWeight="bold"
                                 style={{ WebkitFontSmoothing: 'none', fontSmooth: 'never' } as any}
+                                className="board-marker"
                             >
                                 {displayText}
                             </text>
