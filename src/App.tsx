@@ -43,7 +43,7 @@ export interface HistoryState {
     markers?: Marker[];
 }
 
-import { createNode, getPath, addMove, GameNode, recalculateBoards } from './utils/treeUtilsV2'
+import { createNode, getPath, addMove, GameNode, recalculateBoards, getMainPath } from './utils/treeUtilsV2'
 
 function App() {
     const { t, language, setLanguage } = useTranslation();
@@ -1668,13 +1668,15 @@ function App() {
             const originalFigureMode = isFigureMode;
             setIsFigureMode(true);
 
-            // Navigate through the main path
-            const mainPath = history;
+            // Navigate through the main path (Full game sequence)
+            const mainPath = getMainPath(rootNode);
             const frames: string[] = [];
 
             // Capture frames
             for (let i = 0; i < mainPath.length; i++) {
-                setCurrentNodeId(mainPath[i].id);
+                flushSync(() => {
+                    setCurrentNodeId(mainPath[i].id);
+                });
                 // Wait for render
                 await new Promise(r => setTimeout(r, 100));
 
@@ -1730,7 +1732,9 @@ function App() {
             }
 
             // Restore original state
-            setCurrentNodeId(originalNodeId);
+            flushSync(() => {
+                setCurrentNodeId(originalNodeId);
+            });
             setIsFigureMode(originalFigureMode);
 
         } catch (err) {
@@ -1740,7 +1744,7 @@ function App() {
             setIsGifExporting(false);
             setGifProgress(0);
         }
-    }, [svgRef, history, currentNodeId, boardSize, isMonochrome, playbackSpeed, isFigureMode, getRestoredStones, setCurrentNodeId]);
+    }, [svgRef, history, rootNode, currentNodeId, boardSize, isMonochrome, playbackSpeed, isFigureMode, getRestoredStones, setCurrentNodeId]);
 
     const handleExportSelection = useCallback(async () => {
         if (!selectionStart || !selectionEnd) return;

@@ -111,3 +111,13 @@ export const recalculateBoards = (node: GameNode) => {
         }
     }
 };
+
+export const getMainPath = (root: GameNode): GameNode[] => {
+    const path: GameNode[] = [root];
+    let curr = root;
+    while (curr.children.length > 0) {
+        curr = curr.children[0];
+        path.push(curr);
+    }
+    return path;
+};
