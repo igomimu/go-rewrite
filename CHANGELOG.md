@@ -1,4 +1,12 @@
 # Changelog
+ 
+## [2.0.6] - 2026-01-30
+### Added
+- **GIF Export & Auto-Play**: Restored GIF export feature and added playback speed control (Slow/Normal/Fast/Max).
+- **Localization**: Added Japanese/English labels for playback speed.
+
+### Fixed
+- **Export Quality**: Fixed an issue where manual markers (△, □, etc.) were hidden in PNG exports. Markers are now consistently preserved as the top layer.
 
 ## [2.0.5] - 2026-01-26
 ### Fixed

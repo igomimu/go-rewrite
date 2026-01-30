@@ -25,6 +25,7 @@ export const zh: Record<TranslationKey, string> = {
     'tooltip.showNumbers': '显示手数: {status}',
     'tooltip.pass': '虚手',
     'tooltip.showNextMove': '显示下一手候选: {status}',
+    'tooltip.playbackSpeed': '播放速度',
 
     // Tooltips - Export
     'tooltip.copyAs': '复制为{format} (点击复制)',
@@ -65,9 +66,13 @@ export const zh: Record<TranslationKey, string> = {
     'ui.black': '黑',
     'ui.white': '白',
     'ui.color': '彩色',
-    'ui.monochrome': '黑白',
+    'ui.monochrome': '单色',
     'ui.branch': '分支',
-    'ui.exportingGif': '正在生成 GIF...',
+    'ui.exportingGif': 'GIF生成中...',
+    'ui.speedSlow': '低速',
+    'ui.speedNormal': '标准',
+    'ui.speedFast': '高速',
+    'ui.speedMax': '最快',
 
     // Help Modal
     'help.title': '快捷键 & 帮助',

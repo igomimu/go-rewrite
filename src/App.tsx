@@ -3,8 +3,8 @@ import { flushSync } from 'react-dom'
 import GoBoard, { ViewRange, BoardState, StoneColor, Marker, Stone } from './components/GoBoard'
 import GameInfoModal from './components/GameInfoModal'
 import PrintSettingsModal, { PrintSettings } from './components/PrintSettingsModal'
-import { exportToPng, exportToSvg, exportToEmf } from './utils/exportUtils'
-// import { createGifFromImages } from './utils/gifExportUtils' // Unused
+import { exportToPng, exportToSvg, exportToEmf, prepareSvgForExport, svgToPngBlob } from './utils/exportUtils'
+import { createGifFromImages } from './utils/gifExportUtils'
 import { checkCaptures } from './utils/gameLogic'
 import { parseSGFTree, generateSGFTree, SgfTreeNode } from './utils/sgfUtils'
 import { generatePrintFigures } from './utils/printUtils'
@@ -106,6 +106,10 @@ function App() {
     const [showCapturedInExport, setShowCapturedInExport] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
     const [playbackSpeed, setPlaybackSpeed] = useState(800); // ms per move (Default 0.8s)
+
+    const [isFigureMode, setIsFigureMode] = useState(false); // Internal State for Export Auto-Switch
+    const [isGifExporting, setIsGifExporting] = useState(false);
+    const [gifProgress, setGifProgress] = useState(0);
 
     // Auto-Play Effect
     useEffect(() => {
@@ -1204,11 +1208,12 @@ function App() {
 
 
 
-    // @ts-ignore
-    const performExport = useCallback(async (bounds: { minX: number, maxX: number, minY: number, maxY: number }, restoredStones: { x: number, y: number, color: StoneColor, text: string }[] = [], options: { isSvg: boolean, destination?: 'CLIPBOARD' | 'DOWNLOAD', filename?: string }) => {
+
+    const performExport = useCallback(async (bounds: { minX: number, maxX: number, minY: number, maxY: number }, restoredStones: { x: number, y: number, color: StoneColor, text: string }[] = [], options: { mode: 'SVG' | 'PNG' | 'EMF', destination?: 'CLIPBOARD' | 'DOWNLOAD', filename?: string }) => {
         if (!svgRef.current) return;
 
-        const { isSvg, destination = 'CLIPBOARD', filename } = options;
+        const { mode, destination = 'CLIPBOARD', filename } = options;
+        const stonesToDraw = restoredStones;
         const CELL_SIZE = 40;
         const MARGIN = 40;
         const PADDING = 20;
@@ -1574,26 +1579,28 @@ function App() {
             finalH += 50;
         }
 
+        // Final Sweep: Move board markers to the top so they aren't covered by collision stones or legend background
+        const markersInClone = clone.querySelectorAll('.board-marker');
+        markersInClone.forEach(m => clone.appendChild(m));
 
         // No width extension needed as we wrap content.
         clone.setAttribute('viewBox', `${finalX} ${finalY} ${finalW} ${finalH}`);
         clone.setAttribute('width', `${finalW}`);
         clone.setAttribute('height', `${finalH}`);
 
-        if (modeToUse === 'SVG') {
+        if (mode === 'SVG') {
             await exportToSvg(clone, { backgroundColor: bgColor, destination: destination, filename: filename });
-        } else if (modeToUse === 'EMF') {
+        } else if (mode === 'EMF') {
             await exportToEmf(clone, { backgroundColor: bgColor, destination: destination, filename: filename });
         } else {
             await exportToPng(clone, { scale: 3, backgroundColor: bgColor, destination: destination, filename });
         }
-    }, [hiddenMoves, stonesToDraw, showCoordinates, showCapturedInExport, isMonochrome, specialLabels]);
+    }, [hiddenMoves, showCoordinates, showCapturedInExport, isMonochrome, specialLabels, svgRef]);
 
 
     const handleExport = useCallback(async (forcedMode?: 'SVG' | 'PNG', destination?: 'CLIPBOARD' | 'DOWNLOAD') => {
         const modeToUse = forcedMode || exportMode;
-        // isSvg used for internal logic, but we'll use modeToUse for actual export call
-        const isSvg = modeToUse === 'SVG';
+        // modeToUse for actual export call
 
         const filename = ''; // Empty filename as requested
 
@@ -1608,6 +1615,10 @@ function App() {
         };
 
         // Auto-Enable Figure Mode (Show Label A) for Export
+        setIsFigureMode(true);
+        // Wait for React Render (Important for visual updates like Labels)
+        await new Promise(r => setTimeout(r, 100));
+
         try {
             // MERGE: Captured Stones + Collision Restored Stones (for "Leave 5")
             // Requirement: "If placement is taken, it must not be erased".
@@ -1615,12 +1626,121 @@ function App() {
             const captured = getRestoredStones();
             const restored = captured;
 
-            await performExport(fullBounds, restored, { isSvg, destination, filename });
+            await performExport(fullBounds, restored, { mode: modeToUse, destination, filename });
         } catch (err) {
             console.error("Export Error:", err);
+        } finally {
+            setIsFigureMode(false);
         }
 
-    }, [boardSize, exportMode, showCapturedInExport, getRestoredStones, performExport]);
+    }, [boardSize, exportMode, getRestoredStones, performExport]);
+
+    const handleExportGif = useCallback(async () => {
+        if (!svgRef.current) return;
+
+        // 1. Pre-Save Flow: First get the file handle to prevent timeout
+        let writable: any;
+        let handle: any;
+
+        try {
+            // @ts-ignore
+            if (window.showSaveFilePicker) {
+                // @ts-ignore
+                handle = await window.showSaveFilePicker({
+                    id: 'gorw_gif',
+                    types: [{
+                        description: 'GIF Animation',
+                        accept: { 'image/gif': ['.gif'] },
+                    }],
+                });
+                writable = await handle.createWritable();
+            }
+        } catch (err) {
+            if ((err as Error).name === 'AbortError') return;
+            console.warn('File Picker failed, fallback to direct download...', err);
+        }
+
+        setIsGifExporting(true);
+        setGifProgress(0);
+
+        try {
+            const originalNodeId = currentNodeId;
+            const originalFigureMode = isFigureMode;
+            setIsFigureMode(true);
+
+            // Navigate through the main path
+            const mainPath = history;
+            const frames: string[] = [];
+
+            // Capture frames
+            for (let i = 0; i < mainPath.length; i++) {
+                setCurrentNodeId(mainPath[i].id);
+                // Wait for render
+                await new Promise(r => setTimeout(r, 100));
+
+                const CELL_SIZE = 40;
+                const MARGIN = 40;
+                const width = (boardSize) * CELL_SIZE + MARGIN * 2;
+                const height = (boardSize) * CELL_SIZE + MARGIN * 2;
+
+                // Export logic using the same approach as exportToPng
+                // But we need a data URL for gifshot
+                // prepareSvgForExport already clones internally
+                const clone = prepareSvgForExport(svgRef.current!, { backgroundColor: isMonochrome ? '#FFFFFF' : '#DCB35C' });
+
+                // Add restored stones to clone (same as performExport)
+                // ... (simplified for now, ideally reused performExport's logic)
+
+                const pngBlob = await svgToPngBlob(clone, width, height, 2, isMonochrome ? '#FFFFFF' : '#DCB35C');
+                const dataUrl = await new Promise<string>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.readAsDataURL(pngBlob);
+                });
+
+                frames.push(dataUrl);
+                setGifProgress(Math.round(((i + 1) / mainPath.length) * 100));
+            }
+
+            // Generate GIF
+            const gifDataUrl = await createGifFromImages(frames, {
+                width: 800,
+                height: 800,
+                interval: playbackSpeed / 1000,
+                progressCallback: (p) => {
+                    // gifshot progress is 0 to 1
+                    setGifProgress(100 + Math.round(p * 100)); // Special range for generation phase
+                }
+            });
+
+            const gifBlob = await (await fetch(gifDataUrl)).blob();
+
+            if (writable) {
+                await writable.write(gifBlob);
+                await writable.close();
+            } else {
+                // Fallback direct download
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(gifBlob);
+                link.download = 'game.gif';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(link.href);
+            }
+
+            // Restore original state
+            setCurrentNodeId(originalNodeId);
+            setIsFigureMode(originalFigureMode);
+
+        } catch (err) {
+            console.error("GIF Export Error:", err);
+            alert("GIF生成に失敗しました。");
+        } finally {
+            setIsGifExporting(false);
+            setGifProgress(0);
+        }
+    }, [svgRef, history, currentNodeId, boardSize, isMonochrome, playbackSpeed, isFigureMode, getRestoredStones, setCurrentNodeId]);
 
     const handleExportSelection = useCallback(async () => {
         if (!selectionStart || !selectionEnd) return;
@@ -1631,11 +1751,15 @@ function App() {
         const y2 = Math.max(selectionStart.y, selectionEnd.y);
 
         try {
+            setIsFigureMode(true);
+            await new Promise(r => setTimeout(r, 50));
             const captured = getRestoredStones(); // Always included
             const restored = captured;
-            await performExport({ minX: x1, maxX: x2, minY: y1, maxY: y2 }, restored, { isSvg: exportMode === 'SVG' });
+            await performExport({ minX: x1, maxX: x2, minY: y1, maxY: y2 }, restored, { mode: exportMode });
         } catch (e) {
             console.error(e);
+        } finally {
+            setIsFigureMode(false);
         }
 
         // Reset Selection
@@ -1644,7 +1768,7 @@ function App() {
         setSelectionEnd(null);
         setDragMode('SELECTING');
         setMoveSource(null);
-    }, [selectionStart, selectionEnd, getBounds, getRestoredStones, showCapturedInExport, performExport]);
+    }, [selectionStart, selectionEnd, getBounds, getRestoredStones, showCapturedInExport, performExport, exportMode, setIsFigureMode]);
 
 
 
@@ -2204,6 +2328,18 @@ function App() {
                                 ⬇️
                             </button>
                             <button
+                                onClick={handleExportGif}
+                                disabled={isGifExporting}
+                                title={t('tooltip.exportGif')}
+                                className="w-6 h-6 rounded-md bg-white text-indigo-600 hover:bg-indigo-50 flex items-center justify-center font-bold transition-all text-sm shadow-sm disabled:opacity-50 relative overflow-hidden"
+                            >
+                                {isGifExporting ? (
+                                    <div className="absolute inset-0 bg-indigo-100 flex items-center justify-center">
+                                        <span className="text-[8px] font-sans">{gifProgress > 100 ? gifProgress - 100 : gifProgress}%</span>
+                                    </div>
+                                ) : "🎬"}
+                            </button>
+                            <button
                                 title={t('tooltip.toggleFormat')}
                                 onClick={() => {
                                     const next = exportMode === 'SVG' ? 'PNG' : (exportMode === 'PNG' ? 'EMF' : 'SVG');
@@ -2378,9 +2514,9 @@ function App() {
                         onDragStart={handleDragStart}
                         onDragMove={handleDragMove}
                         onDragEnd={handleDragEnd}
-                        hiddenMoves={[]} // LEGEND HIDDEN ON SCREEN, ONLY FOR EXPORT
-                        prioritizeLabel={false}
                         specialLabels={specialLabels}
+                        hiddenMoves={isFigureMode ? [] : []}
+                        prioritizeLabel={isFigureMode}
                         nextNumber={nextNumber}
                         activeColor={activeColor}
                         markers={history[currentMoveIndex]?.markers || []}
@@ -2581,16 +2717,16 @@ function App() {
 
                         {/* Speed Control */}
                         <select
-                            title="Playback Speed"
+                            title={t('tooltip.playbackSpeed')}
                             value={playbackSpeed}
                             onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
                             style={{ height: '28px' }} // Explicit height to match buttons
                             className="text-xs border border-gray-200 rounded px-1 w-16 text-center cursor-pointer hover:bg-gray-50 ml-1 bg-white"
                         >
-                            <option value="2000">Slow</option>
-                            <option value="800">Normal</option>
-                            <option value="400">Fast</option>
-                            <option value="100">Max</option>
+                            <option value="2000">{t('ui.speedSlow')}</option>
+                            <option value="800">{t('ui.speedNormal')}</option>
+                            <option value="400">{t('ui.speedFast')}</option>
+                            <option value="100">{t('ui.speedMax')}</option>
                         </select>
 
                         {/* Branch Candidates (if multiple branches exist) */}

@@ -23,6 +23,7 @@ export const ja = {
     'tooltip.showNumbers': '手番号表示: {status}',
     'tooltip.pass': 'パス',
     'tooltip.showNextMove': '次の一手候補を表示: {status}',
+    'tooltip.playbackSpeed': '再生速度',
 
     // Tooltips - Export
     'tooltip.copyAs': '{format}としてコピー (クリックでコピー)',
@@ -66,6 +67,10 @@ export const ja = {
     'ui.monochrome': '白黒',
     'ui.branch': '分岐',
     'ui.exportingGif': 'GIF生成中...',
+    'ui.speedSlow': '低速',
+    'ui.speedNormal': '標準',
+    'ui.speedFast': '高速',
+    'ui.speedMax': '最速',
 
     // 譜分け関連
 

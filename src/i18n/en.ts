@@ -25,6 +25,7 @@ export const en: Record<TranslationKey, string> = {
     'tooltip.showNumbers': 'Show Move Numbers: {status}',
     'tooltip.pass': 'Pass',
     'tooltip.showNextMove': 'Show Next Move Candidates: {status}',
+    'tooltip.playbackSpeed': 'Playback Speed',
 
     // Tooltips - Export
     'tooltip.copyAs': 'Copy as {format} (Click to Copy)',
@@ -68,6 +69,10 @@ export const en: Record<TranslationKey, string> = {
     'ui.monochrome': 'Monochrome',
     'ui.branch': 'Branch',
     'ui.exportingGif': 'Creating GIF...',
+    'ui.speedSlow': 'Slow',
+    'ui.speedNormal': 'Normal',
+    'ui.speedFast': 'Fast',
+    'ui.speedMax': 'Max',
 
     // Help Modal
     'help.title': 'Shortcuts & Help',
