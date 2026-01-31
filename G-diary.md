@@ -194,7 +194,7 @@
             - **Word印刷用途**: GOWriteの使用を推奨。
             - **GORewriteの強み**: SGF編集、Web公開用SVG出力、他のSVG対応アプリへの出力。
 
-    - **[Fix] Restore SVG Export & Word Compatibility (v2.0.8)**:
+    - **[Fix] Restore SVG Export & Word Compatibility (v2.0.6)**:
         - **Strategy Shift**: Previous "Aggressive Color Offset" failed because Word's XML parser misinterpreted `<style>` blocks and applied dark mode inversion anyway.
         - **Current Solution**: **Flat DOM + Aggressive Offset**.
             - **Flat DOM**: Completely removed internal `<style>` tags, classes, and media queries from the exported SVG.
